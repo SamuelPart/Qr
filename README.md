@@ -50,6 +50,52 @@ base de datos: al ser todo client-side, el costo de operación es **cero**.
 npm run icons      # regenera public/icons/* desde assets/icon-source.png
 ```
 
+## 🤖 Correr en Android (Android Studio)
+
+El repo incluye un proyecto nativo de Android (Carpeta `android/`, generado con
+Capacitor): la app web corre dentro de un WebView nativo, con cámara para el
+escáner y funcionamiento 100% offline (los assets ya vienen commiteados, no
+necesitas servidor).
+
+**Requisitos**
+
+- Android Studio **Narwhal (2025.1.1) o superior** (incluye JDK 21)
+- Node.js 20+ para los scripts de sincronización
+- Android SDK 36 (Android Studio lo descarga solo en el primer sync)
+
+**Pasos**
+
+1. Clona el repo e instala dependencias web:
+   ```bash
+   npm install
+   ```
+2. Sincroniza la última versión web con Android (opcional si acabas de clonar,
+   pero recomendado tras cualquier cambio en `src/`):
+   ```bash
+   npm run android:sync     # = next build + npx cap sync android
+   ```
+3. En Android Studio: **Open** → selecciona la carpeta `android/` del repo →
+   espera el sync de Gradle (descarga SDK/dependencias la primera vez).
+4. Elige un dispositivo (emulador o tu teléfono con depuración USB) y pulsa
+   **Run ▶**.
+
+Desde terminal (con SDK y un dispositivo/AVD conectado):
+
+```bash
+npm run android:run    # compila, instala y lanza la app
+npm run android:open   # solo abre Android Studio
+```
+
+**Notas**
+
+- El escáner pedirá permiso de cámara la primera vez (lo gestiona el puente nativo).
+- La app se sirve desde el propio dispositivo (`https://localhost` interno de
+  Capacitor): funciona sin internet y el service worker añade caché offline.
+- Ícono y splash de marca: `npm run icons` los regenera también para Android
+  (requiere que exista la carpeta `android/`).
+- ID de aplicación: `pe.qrstudio.app` (cámbialo en `capacitor.config.ts` antes
+  de publicar; luego ajusta `applicationId` en `android/app/build.gradle`).
+
 ## 🧰 Stack
 
 - [Next.js](https://nextjs.org) (App Router, export estático) + TypeScript + Tailwind CSS

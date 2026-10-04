@@ -1,0 +1,11 @@
+{
+	"appId": "pe.qrstudio.app",
+	"appName": "QR Studio",
+	"webDir": "out",
+	"server": {
+		"androidScheme": "https"
+	},
+	"android": {
+		"allowMixedContent": false
+	}
+}
