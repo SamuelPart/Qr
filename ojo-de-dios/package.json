@@ -2,19 +2,25 @@
   "name": "ojo-de-dios",
   "version": "1.0.0",
   "description": "Consola de vigilancia sobre fuentes públicas abiertas: cámaras de tráfico, ADS-B, AIS, satélites, sismos, radar e imagen satelital",
+  "license": "MIT",
+  "private": true,
+  "engines": {
+    "node": ">=18"
+  },
+  "os": [
+    "linux",
+    "darwin",
+    "win32"
+  ],
   "main": "index.js",
   "scripts": {
     "start": "node server.js",
     "test": "node test/smoke.mjs",
     "refresh-data": "node scripts/refresh-data.mjs"
   },
-  "keywords": [],
-  "author": "",
-  "license": "MIT",
   "dependencies": {
     "express": "^4.22.3",
     "leaflet": "^1.9.4",
     "satellite.js": "^7.1.0"
-  },
-  "private": true
+  }
 }

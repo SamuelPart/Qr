@@ -13,13 +13,60 @@ radar meteorológico e imágenes satelitales de la NASA.
 
 ## Arrancar
 
+### Kali Linux (o cualquier Debian/Ubuntu)
+
+Hay un instalador que comprueba el entorno, instala lo que falte y valida que
+el motor arranque:
+
+```bash
+git clone https://github.com/SamuelPart/Qr.git
+cd Qr/ojo-de-dios
+./scripts/instalar-kali.sh
+```
+
+Y después, a elegir:
+
+```bash
+./scripts/instalar-kali.sh --arrancar    # arranca en primer plano
+./scripts/instalar-kali.sh --servicio    # servicio systemd, arranca al encender
+./scripts/instalar-kali.sh --desinstalar # quita el servicio
+```
+
+El instalador detecta si lo ejecutas como root o con sudo, porque Kali suele
+usarse como root y ahí `sudo` puede no existir. Ninguna dependencia se compila:
+express, leaflet y satellite.js son JavaScript puro, así que no hace falta
+`build-essential`.
+
+### A mano, en cualquier sistema
+
 ```bash
 cd ojo-de-dios
-npm install          # solo la primera vez
-npm start            # → http://localhost:3000
+npm install
+npm start          # → http://localhost:3000
+npm test           # prueba de humo
 ```
 
 No hace falta ninguna clave de API ni registro.
+
+### Entrar desde otro dispositivo
+
+El servidor escucha en `0.0.0.0`, así que desde el móvil o un portátil de la
+misma red te vale la IP de la máquina con Kali:
+
+```bash
+ip -4 addr show scope global | grep inet    # averigua la IP
+# luego, en el otro dispositivo:  http://192.168.x.x:3000
+```
+
+Si tienes `ufw` activo: `sudo ufw allow 3000/tcp`.
+Si hay una VPN levantada, la IP que veas puede ser del túnel y no de tu red.
+
+### Requisitos
+
+- **Node.js 18 o superior** (se recomienda 20 o 22). El código usa `fetch`
+  nativo y `AbortSignal.timeout`, que no existen en versiones anteriores.
+  Con Node 18/20 verás un aviso de *fetch experimental*: es inofensivo.
+- Puerto 3000 libre, o cambia con `PORT=8080 npm start`.
 
 ---
 
@@ -70,18 +117,22 @@ CelesTrak) y reescribe `data/*.json`.
 
 ```
 ojo-de-dios/
-├── server.js                  Express + proxy con lista blanca
-├── scripts/refresh-data.mjs   Actualiza las instantáneas de /data
-├── data/                      Instantáneas de respaldo (JSON)
-│   ├── tle.json               Elementos orbitales
-│   ├── cams-london.json       Cámaras TfL
-│   ├── cams-finland.json      Cámaras Fintraffic
-│   └── sources.json           Catálogo de fuentes con su licencia
+├── server.js                    Express + proxy con lista blanca
+├── scripts/
+│   ├── instalar-kali.sh         Instalador para Kali/Debian (+ servicio systemd)
+│   └── refresh-data.mjs         Actualiza las instantáneas de /data
+├── test/smoke.mjs               Prueba de humo sin navegador
+├── data/                        Instantáneas de respaldo (JSON)
+│   ├── tle.json                 Elementos orbitales
+│   ├── cams-london.json         Cámaras TfL
+│   ├── cams-finland.json        Cámaras Fintraffic
+│   ├── quakes.json              Sismos USGS
+│   └── sources.json             Catálogo de fuentes con su licencia
 └── public/
-    ├── index.html             Interfaz y panel legal
-    ├── style.css              Tema HUD
-    ├── app.js                 Motor: capas, SGP4, proxy y respaldos
-    └── vendor/                Leaflet y satellite.js servidos en local
+    ├── index.html               Interfaz y panel legal
+    ├── style.css                Tema HUD
+    ├── app.js                   Motor: capas, SGP4, proxy y respaldos
+    └── vendor/                  Leaflet y satellite.js servidos en local
 ```
 
 Se sirven Leaflet y satellite.js desde `public/vendor/`, sin CDN: la aplicación
