@@ -1,0 +1,31 @@
+{
+  "name": "qr-studio",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Generador de códigos QR personalizados. 100% local, gratis y offline.",
+  "scripts": {
+    "dev": "next dev -H 0.0.0.0 -p 3000",
+    "build": "next build",
+    "start": "next start -H 0.0.0.0 -p 3000",
+    "lint": "next lint",
+    "icons": "node scripts/make-icons.mjs"
+  },
+  "dependencies": {
+    "html5-qrcode": "^2.3.8",
+    "lucide-react": "^0.454.0",
+    "next": "^14.2.15",
+    "qr-code-styling": "^1.8.2",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.16.11",
+    "@types/react": "^18.3.11",
+    "@types/react-dom": "^18.3.1",
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.4.47",
+    "sharp": "^0.33.5",
+    "tailwindcss": "^3.4.14",
+    "typescript": "^5.6.3"
+  }
+}
