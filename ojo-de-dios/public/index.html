@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Ojo de Dios · vigilancia de fuentes públicas</title>
+<link rel="stylesheet" href="./vendor/leaflet.css">
+<link rel="stylesheet" href="./style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='13' fill='none' stroke='%2322d3ee' stroke-width='2'/><circle cx='16' cy='16' r='5' fill='%2322d3ee'/></svg>">
+</head>
+<body>
+
+<div id="app">
+
+  <!-- ══════════════ CABECERA ══════════════ -->
+  <header id="cabecera">
+    <div class="marca">
+      <svg viewBox="0 0 32 32" class="logo" aria-hidden="true">
+        <circle cx="16" cy="16" r="13" fill="none" stroke="currentColor" stroke-width="1.5"/>
+        <circle cx="16" cy="16" r="8"  fill="none" stroke="currentColor" stroke-width="1" opacity=".55"/>
+        <circle cx="16" cy="16" r="3.4" fill="currentColor"/>
+        <path d="M16 1v6M16 25v6M1 16h6M25 16h6" stroke="currentColor" stroke-width="1.5"/>
+      </svg>
+      <div class="titulos">
+        <h1>OJO DE DIOS</h1>
+        <p>Vigilancia de fuentes públicas abiertas</p>
+      </div>
+    </div>
+
+    <div class="cabecera-centro">
+      <div class="pildora" id="pildora-reloj">
+        <span class="etq">UTC</span><span id="reloj">--:--:--</span>
+      </div>
+      <div class="pildora" id="pildora-red">
+        <span class="punto" id="punto-red"></span><span id="texto-red">comprobando red…</span>
+      </div>
+      <div class="pildora" id="pildora-objetos">
+        <span class="etq">objetos</span><span id="contador-objetos">0</span>
+      </div>
+    </div>
+
+    <nav class="acciones">
+      <button id="btn-capas" class="btn" title="Mostrar u ocultar el panel de capas">Capas</button>
+      <button id="btn-recentrar" class="btn" title="Volver a la vista global">Global</button>
+      <button id="btn-legal" class="btn" title="Qué es legal y qué no">Límites legales</button>
+    </nav>
+  </header>
+
+  <!-- ══════════════ MAPA ══════════════ -->
+  <main id="mapa"></main>
+
+  <!-- ══════════════ PANEL DE CAPAS ══════════════ -->
+  <aside id="panel-capas" class="panel">
+    <div class="panel-cab">
+      <h2>Capas de observación</h2>
+      <button class="cerrar" data-cierra="panel-capas" aria-label="Cerrar">×</button>
+    </div>
+
+    <div class="panel-cuerpo" id="lista-capas"><!-- generado --></div>
+
+    <div class="panel-pie">
+      <div class="campo">
+        <label for="sel-base">Fondo de mapa</label>
+        <select id="sel-base">
+          <option value="carto-oscuro">CARTO oscuro</option>
+          <option value="esri-satelite">Imagen aérea/satelital (Esri)</option>
+          <option value="carto-claro">CARTO claro</option>
+          <option value="osm">OpenStreetMap</option>
+        </select>
+      </div>
+      <div class="campo">
+        <label for="sel-fecha-gibs">Imagen satelital NASA</label>
+        <select id="sel-fecha-gibs">
+          <option value="1">Ayer</option>
+          <option value="2">Hace 2 días</option>
+          <option value="3">Hace 3 días</option>
+          <option value="4">Hace 4 días</option>
+        </select>
+      </div>
+      <button id="btn-refrescar" class="btn ancho">Refrescar capas activas</button>
+      <p class="nota-pie" id="resumen-fuentes">—</p>
+    </div>
+  </aside>
+
+  <!-- ══════════════ PANEL DE DETALLE ══════════════ -->
+  <aside id="panel-detalle" class="panel derecha oculto">
+    <div class="panel-cab">
+      <h2 id="detalle-titulo">Detalle</h2>
+      <button class="cerrar" data-cierra="panel-detalle" aria-label="Cerrar">×</button>
+    </div>
+    <div class="panel-cuerpo" id="detalle-cuerpo"></div>
+  </aside>
+
+  <!-- ══════════════ CINTA DE EVENTOS ══════════════ -->
+  <footer id="cinta">
+    <span class="cinta-etq">ÚLTIMOS EVENTOS</span>
+    <div class="cinta-pista"><div class="cinta-contenido" id="cinta-contenido">Esperando datos…</div></div>
+  </footer>
+
+</div>
+
+<!-- ══════════════ MODAL LEGAL ══════════════ -->
+<div id="modal-legal" class="modal oculto">
+  <div class="modal-caja">
+    <div class="panel-cab">
+      <h2>Qué puedes ver y qué no</h2>
+      <button class="cerrar" data-cierra="modal-legal" aria-label="Cerrar">×</button>
+    </div>
+    <div class="modal-cuerpo">
+      <p class="destacado">
+        Este proyecto <strong>solo consume feeds que su operador publica de forma abierta</strong>:
+        cámaras de tráfico oficiales, datos orbitales públicos, sismología, radar meteorológico
+        e imágenes satelitales de la NASA. No hay accesos, credenciales ni puertas traseras.
+      </p>
+
+      <h3>Lo que sí es público</h3>
+      <ul>
+        <li><strong>Cámaras de tráfico oficiales.</strong> TfL (Londres), Fintraffic (Finlandia) y Caltrans publican sus cámaras como datos abiertos. Las ves porque el Estado decidió publicarlas.</li>
+        <li><strong>Vuelos.</strong> Las aeronaves emiten su posición por radio en abierto (ADS-B). Cualquiera con un receptor de 30 € la capta. No es una filtración: es una emisión.</li>
+        <li><strong>Barcos.</strong> Igual, por AIS. Obligatorio por convenio internacional en buques grandes.</li>
+        <li><strong>Satélites.</strong> Las efemérides orbitales las publica el 18.º Escuadrón de Defensa Espacial de EE. UU. Son dominio público.</li>
+        <li><strong>Imágenes satelitales.</strong> NASA, ESA y USGS publican productos de observación terrestre de forma gratuita y deliberada.</li>
+      </ul>
+
+      <h3>Lo que no es accesible, y por qué</h3>
+      <ul>
+        <li><strong>Cámaras privadas o municipales cerradas.</strong> No están en Internet; acceder a ellas sin autorización es un delito en prácticamente toda jurisdicción (en España, arts. 197 y 264 del Código Penal; en EE. UU., CFAA; en el Reino Unido, Computer Misuse Act).</li>
+        <li><strong>Satélites espía en vivo.</strong> No existe un feed público. Los sistemas militares son clasificados. Lo que hay son productos comerciales de pago con horas o días de latencia.</li>
+        <li><strong>Zoom infinito sobre cualquier tejado en tiempo real.</strong> Ninguna constelación civil ofrece vídeo continuo con ese detalle. Lo mejor abierto son imágenes de ~1 día de antigüedad y ~250 m por píxel en color verdadero, o ~30-50 cm en imagen aérea comercial de archivo.</li>
+        <li><strong>Cámaras de seguridad ajenas por escaneo de puertos o contraseñas por defecto.</strong> Eso no es "acceder a lo expuesto", es intrusión. Además, la mayoría de esas cámaras son víctimas, no servicios públicos.</li>
+      </ul>
+
+      <h3>Por qué el "Ojo de Dios" literal no existe</h3>
+      <p>
+        Un sistema capaz de ver cualquier punto del planeta en vivo y con detalle requeriría cientos de miles de
+        satélites de baja órbita con enlace en tiempo real. Ni los presupuestos militares combinados lo financian.
+        Lo que existe de verdad es lo que ves aquí: <strong>un mosaico de fuentes abiertas</strong>, cada una con su
+        latencia, su cobertura y su resolución. Ensamblarlas bien es el trabajo difícil — y es exactamente lo que
+        hace esta aplicación.
+      </p>
+
+      <h3>Uso responsable</h3>
+      <p>
+        Vigilar infraestructura pública está bien. Vigilar personas está mal. Ninguna de las fuentes de esta
+        aplicación te permite identificar a una persona concreta, y no debes intentar reconstruir esa capacidad
+        combinando feeds. Respeta además los límites de peticiones de cada API: son servicios gratuitos
+        mantenidos por instituciones públicas.
+      </p>
+    </div>
+  </div>
+</div>
+
+<script src="./vendor/leaflet.js"></script>
+<script type="module" src="./app.js"></script>
+</body>
+</html>
