@@ -27,3 +27,24 @@ que explica dónde está la frontera entre consultar datos abiertos y cometer un
 delito.
 
 Documentación completa en [`ojo-de-dios/README.md`](ojo-de-dios/README.md).
+
+---
+
+## Ojo de Dios · app nativa de Android
+
+En `ojo-de-dios-nativo/` está la versión **nativa** para Android: Kotlin +
+Jetpack Compose, mapa osmdroid y cálculo orbital SGP4 **dentro del teléfono**.
+No es un WebView ni envuelve la versión web: es una app Android de verdad.
+
+No se puede compilar desde aquí —hace falta Android Studio—, así que esa carpeta
+contiene los fuentes listos para pegar en un proyecto nuevo, más la guía
+[`ojo-de-dios-nativo/LEEME-PRIMERO.md`](ojo-de-dios-nativo/LEEME-PRIMERO.md)
+con los pasos exactos (nombre de paquete, SDK mínimo, dependencias) y un
+`AndroidManifest.xml` ya escrito.
+
+Solo dos dependencias, ninguna con clave de API: `osmdroid-android` y
+`predict4java`.
+
+> La carpeta `ojo-de-dios/android/` es la versión anterior hecha con Capacitor
+> (es decir, un WebView). Fue un paso intermedio: la vía para Android es la
+> carpeta nativa. El servidor web sigue siendo independiente y válido.

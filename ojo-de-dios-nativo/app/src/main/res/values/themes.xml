@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      Tema del sistema, sin ActionBar. Se usa la familia Material del propio
+      Android para no depender de AppCompat ni de Material Components: una
+      actividad de Compose no los necesita, y así el proyecto se queda con
+      menos dependencias que puedan chocar entre versiones.
+    -->
+    <style name="Theme.OjoDeDios" parent="android:Theme.Material.NoActionBar">
+        <item name="android:statusBarColor">#05070C</item>
+        <item name="android:navigationBarColor">#05070C</item>
+        <item name="android:windowBackground">#05070C</item>
+    </style>
+</resources>
