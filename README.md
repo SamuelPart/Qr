@@ -36,11 +36,17 @@ En `ojo-de-dios-nativo/` está la versión **nativa** para Android: Kotlin +
 Jetpack Compose, mapa osmdroid y cálculo orbital SGP4 **dentro del teléfono**.
 No es un WebView ni envuelve la versión web: es una app Android de verdad.
 
-No se puede compilar desde aquí —hace falta Android Studio—, así que esa carpeta
-contiene los fuentes listos para pegar en un proyecto nuevo, más la guía
-[`ojo-de-dios-nativo/LEEME-PRIMERO.md`](ojo-de-dios-nativo/LEEME-PRIMERO.md)
-con los pasos exactos (nombre de paquete, SDK mínimo, dependencias) y un
-`AndroidManifest.xml` ya escrito.
+**Es un proyecto completo, no una carpeta de fuentes sueltas:** incluye el
+envoltorio de Gradle, la configuración de los módulos, los iconos del lanzador,
+el manifiesto y once archivos Kotlin. Se abre directamente con **Android Studio
+→ File → Open** sobre esa carpeta y se pulsa *Run*; no hay que crear nada con
+el asistente ni copiar archivos.
+
+La guía paso a paso está en
+[`ojo-de-dios-nativo/LEEME-PRIMERO.md`](ojo-de-dios-nativo/LEEME-PRIMERO.md).
+
+No se ha compilado aquí —el entorno de trabajo no tiene JDK ni Android SDK—,
+así que la primera compilación la hará quien lo abra.
 
 Solo dos dependencias, ninguna con clave de API: `osmdroid-android` y
 `predict4java`.

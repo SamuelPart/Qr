@@ -75,8 +75,10 @@ fun PantallaOjoDeDios(
 
     var panelCapasAbierto by remember { mutableStateOf(false) }
     var detalleAbierto by remember { mutableStateOf(false) }
+    var legalAbierto by remember { mutableStateOf(false) }
     val estadoPanel = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val estadoDetalle = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val estadoLegal = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     Box(Modifier.fillMaxSize().background(Colores.Fondo)) {
 
@@ -139,6 +141,8 @@ fun PantallaOjoDeDios(
                     color = Colores.TextoTenue,
                 )
             }
+            BotonFondo("Límites legales", activo = legalAbierto) { legalAbierto = true }
+            Spacer(Modifier.width(12.dp))
             ContadorObjetos(puntos.size + satelites.size)
         }
 
@@ -222,6 +226,17 @@ fun PantallaOjoDeDios(
                 }
                 item { Spacer(Modifier.height(28.dp)) }
             }
+        }
+    }
+
+    // ─────────── Límites legales ───────────
+    if (legalAbierto) {
+        ModalBottomSheet(
+            onDismissRequest = { legalAbierto = false },
+            sheetState = estadoLegal,
+            containerColor = Colores.PanelSuave,
+        ) {
+            PanelLegal()
         }
     }
 
