@@ -15,7 +15,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const RAIZ = join(dirname(fileURLToPath(import.meta.url)), '..');
-const CARPETA_DATOS = join(RAIZ, 'data');
+const CARPETA_DATOS = join(RAIZ, 'public', 'data');
 
 const CABECERAS = {
   'User-Agent': 'Mozilla/5.0 (compatible; OjoDeDios/1.0; +https://github.com/SamuelPart/Qr)',

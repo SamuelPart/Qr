@@ -177,8 +177,8 @@ globalThis.fetch = async (url) => {
 
   if (u.startsWith('./data/')) {
     peticionesSnapshot++;
-    // El servidor monta /data desde la carpeta del proyecto, no desde /public.
-    const ruta = join(RAIZ, u.replace('./', ''));
+    // Las instantáneas viven dentro de /public para poder empaquetarse también en Android.
+    const ruta = join(PUBLICO, u.replace('./', ''));
     try {
       const texto = await readFile(ruta, 'utf8');
       return { ok: true, status: 200, json: async () => JSON.parse(texto), text: async () => texto };

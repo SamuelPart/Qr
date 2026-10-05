@@ -16,9 +16,16 @@
   "scripts": {
     "start": "node server.js",
     "test": "node test/smoke.mjs",
-    "refresh-data": "node scripts/refresh-data.mjs"
+    "refresh-data": "node scripts/refresh-data.mjs",
+    "android": "npx cap sync android && npx cap open android",
+    "android:sync": "npx cap sync android",
+    "android:apk": "npx cap sync android && cd android && ./gradlew assembleDebug",
+    "android:iconos": "bash scripts/hacer-iconos-android.sh"
   },
   "dependencies": {
+    "@capacitor/android": "7.6.9",
+    "@capacitor/cli": "7.6.9",
+    "@capacitor/core": "7.6.9",
     "express": "^4.22.3",
     "leaflet": "^1.9.4",
     "satellite.js": "^7.1.0"

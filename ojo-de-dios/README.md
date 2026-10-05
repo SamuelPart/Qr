@@ -37,6 +37,23 @@ usarse como root y ahí `sudo` puede no existir. Ninguna dependencia se compila:
 express, leaflet y satellite.js son JavaScript puro, así que no hace falta
 `build-essential`.
 
+### Android (app para el celular)
+
+La interfaz es web, así que se empaqueta con Capacitor sin reescribir nada.
+Y hay un premio: **dentro de la app desaparece el problema de CORS**, porque el
+WebView habla con los servicios públicos directamente.
+
+```bash
+npm install
+npm run android        # sincroniza y abre Android Studio
+```
+
+Necesitas Android Studio Ladybug o superior y **JDK 21** (Studio ya trae el suyo).
+Guía completa paso a paso, con la parte de compilar el APK y los problemas
+frecuentes, en **[ANDROID.md](ANDROID.md)**.
+
+Resumen: `public/` → `npx cap sync android` → `android/` → Gradle → APK.
+
 ### A mano, en cualquier sistema
 
 ```bash
@@ -118,22 +135,28 @@ CelesTrak) y reescribe `data/*.json`.
 ```
 ojo-de-dios/
 ├── server.js                    Express + proxy con lista blanca
+├── capacitor.config.json        Configuración de la app de Android
+├── android/                     Proyecto nativo (lo abre Android Studio)
 ├── scripts/
 │   ├── instalar-kali.sh         Instalador para Kali/Debian (+ servicio systemd)
-│   └── refresh-data.mjs         Actualiza las instantáneas de /data
+│   └── refresh-data.mjs         Actualiza las instantáneas
 ├── test/smoke.mjs               Prueba de humo sin navegador
-├── data/                        Instantáneas de respaldo (JSON)
-│   ├── tle.json                 Elementos orbitales
-│   ├── cams-london.json         Cámaras TfL
-│   ├── cams-finland.json        Cámaras Fintraffic
-│   ├── quakes.json              Sismos USGS
-│   └── sources.json             Catálogo de fuentes con su licencia
-└── public/
+└── public/                      ← todo lo empaquetable: web y datos
     ├── index.html               Interfaz y panel legal
     ├── style.css                Tema HUD
     ├── app.js                   Motor: capas, SGP4, proxy y respaldos
-    └── vendor/                  Leaflet y satellite.js servidos en local
+    ├── vendor/                  Leaflet y satellite.js en local, sin CDN
+    └── data/                    Instantáneas de respaldo (JSON)
+        ├── tle.json             Elementos orbitales
+        ├── cams-london.json     Cámaras TfL
+        ├── cams-finland.json    Cámaras Fintraffic
+        ├── quakes.json          Sismos USGS
+        └── sources.json         Catálogo de fuentes con su licencia
 ```
+
+**Todo lo que la app necesita en el celular vive bajo `public/`**, incluidas las
+instantáneas de datos. Es deliberado: Capacitor solo empaqueta ese directorio, y
+si los datos estuvieran fuera no viajarían dentro del APK.
 
 Se sirven Leaflet y satellite.js desde `public/vendor/`, sin CDN: la aplicación
 no depende de terceros para arrancar.

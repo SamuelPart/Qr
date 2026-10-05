@@ -16,6 +16,9 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const HOST = process.env.HOST || '0.0.0.0';
 const RAIZ = __dirname;
+// Todas las instantáneas viven bajo public/, para que también viajen dentro
+// del paquete de Android (Capacitor solo empaqueta el directorio web).
+const CARPETA_DATOS = path.join(RAIZ, 'public', 'data');
 
 // ---------------------------------------------------------------------------
 // Lista blanca de hosts. Solo fuentes públicas declaradas.
@@ -42,7 +45,7 @@ const CACHE_TTL_MS = 60_000;
 const cache = new Map();
 
 function leerSnapshot(nombre) {
-  const ruta = path.join(RAIZ, 'data', `${nombre}.json`);
+  const ruta = path.join(CARPETA_DATOS, `${nombre}.json`);
   if (!fs.existsSync(ruta)) return null;
   try {
     return JSON.parse(fs.readFileSync(ruta, 'utf8'));
@@ -166,7 +169,6 @@ app.get('/api/catalogo', (_req, res) => {
 // Estáticos
 // ---------------------------------------------------------------------------
 app.use(express.static(path.join(RAIZ, 'public'), { maxAge: '1h' }));
-app.use('/data', express.static(path.join(RAIZ, 'data'), { maxAge: '5m' }));
 
 app.get('/', (_req, res) => res.sendFile(path.join(RAIZ, 'public', 'index.html')));
 

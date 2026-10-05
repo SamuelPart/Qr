@@ -2,3 +2,20 @@ node_modules/
 *.log
 .DS_Store
 test/_app-bajo-prueba.mjs
+
+# ── Android / Gradle ─────────────────────────────────────────────
+# Se versiona el proyecto nativo (es configuración), pero no lo que se genera.
+android/.gradle/
+android/build/
+android/app/build/
+android/app/release/
+android/local.properties
+android/.idea/
+android/capacitor-cordova-android-plugins/build/
+*.apk
+*.aab
+*.keystore
+!android/app/src/main/assets/public/
+
+# Arte derivado del icono (se regenera con scripts/hacer-iconos-android.sh)
+build/foreground-1024.png

@@ -8,6 +8,10 @@
  *   1. petición directa desde el navegador  → estado VIVO
  *   2. proxy del servidor (/api/proxy)      → estado PROXY (cuando hay CORS o sin salida a Internet)
  *   3. instantánea local en /data/*.json    → estado RESPALDO
+ *
+ * Dentro de la app de Android no hay servidor Node: el navegador embebido pasa
+ * por CapacitorHttp, que va directo a la red y esquiva CORS, así que la vía 1
+ * funciona sola y las vías 2 y 3 quedan como red de seguridad.
  */
 
 import { twoline2satrec } from './vendor/satellite/io.js';
@@ -17,6 +21,30 @@ import { eciToGeodetic, degreesLat, degreesLong } from './vendor/satellite/trans
 /* ═══════════════════════════════════════════════════════════════════════════
    1. UTILIDADES
    ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   0. PLATAFORMA
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/** true cuando corremos empaquetados como app nativa (Android/iOS vía Capacitor). */
+const ES_APP = Boolean(
+  globalThis.Capacitor?.isNativePlatform?.() ||
+  globalThis.location?.protocol === 'capacitor:' ||
+  (typeof globalThis.Capacitor?.getPlatform === 'function' && globalThis.location?.hostname === 'localhost')
+);
+
+/** true cuando hay un servidor Node detrás sirviendo /api/*. */
+const HAY_SERVIDOR = !ES_APP;
+
+// Android WebView anterior a Chrome 103 no implementa AbortSignal.timeout.
+// Sin esto, toda petición fallaría y la app se quedaría siempre en modo respaldo.
+if (typeof AbortSignal.timeout !== 'function') {
+  AbortSignal.timeout = (ms) => {
+    const controlador = new AbortController();
+    setTimeout(() => controlador.abort(), ms);
+    return controlador.signal;
+  };
+}
 
 const $ = (sel) => document.querySelector(sel);
 
@@ -64,12 +92,14 @@ async function obtener(url, { snapshot = null, ms = 9000 } = {}) {
     ultimoError = err;
   }
 
-  // Vía 2: proxy del servidor
-  try {
-    const datos = await pedir(`/api/proxy?url=${encodeURIComponent(url)}`, ms + 4000);
-    return { datos, origen: 'proxy' };
-  } catch (err) {
-    ultimoError = err;
+  // Vía 2: proxy del servidor (no existe dentro de la app nativa)
+  if (HAY_SERVIDOR) {
+    try {
+      const datos = await pedir(`/api/proxy?url=${encodeURIComponent(url)}`, ms + 4000);
+      return { datos, origen: 'proxy' };
+    } catch (err) {
+      ultimoError = err;
+    }
   }
 
   // Vía 3: instantánea local
@@ -159,7 +189,6 @@ function ponerFondo(clave) {
     attribution: cfg.atribucion,
     subdomains: cfg.subdominios ?? 'abc',
     maxZoom: cfg.maxZoom ?? 19,
-    crossOrigin: true,
   }).addTo(mapa);
   capaFondo.bringToBack();
 }
@@ -1030,6 +1059,66 @@ function pintarResumen() {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
+   12-bis. UBICACIÓN DEL DISPOSITIVO
+   El navegador embebido pide el permiso nativo al sistema; basta con declarar
+   ACCESS_FINE_LOCATION en AndroidManifest.xml. Sin plugins adicionales.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+let marcadorYo = null;
+
+function irAMiUbicacion() {
+  const boton = $('#btn-ubicacion');
+
+  if (!navigator.geolocation) {
+    alert('Este dispositivo no expone la ubicación al navegador.');
+    return;
+  }
+
+  boton.disabled = true;
+  boton.textContent = 'Localizando…';
+
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      const { latitude: lat, longitude: lon, accuracy } = pos.coords;
+
+      if (marcadorYo) mapa.removeLayer(marcadorYo);
+      marcadorYo = L.circleMarker([lat, lon], {
+        radius: 7,
+        color: '#22d3ee',
+        weight: 2,
+        fillColor: '#22d3ee',
+        fillOpacity: 0.35,
+      })
+        .bindPopup(
+          `<strong>Tu posición</strong><br>
+           Precisión: ±${Math.round(accuracy)} m<br>
+           ${lat.toFixed(5)}, ${lon.toFixed(5)}`
+        )
+        .addTo(mapa);
+
+      mapa.setView([lat, lon], 13);
+      marcadorYo.openPopup();
+
+      // Aviso deliberado: lo que aparece en el mapa a partir de aquí puede
+      // afectar a la privacidad de terceros si se comparte.
+      boton.disabled = false;
+      boton.textContent = 'Mi ubicación';
+    },
+    (err) => {
+      boton.disabled = false;
+      boton.textContent = 'Mi ubicación';
+      const motivo = {
+        1: 'Permiso de ubicación denegado. Actívalo en los ajustes de la app.',
+        2: 'Posición no disponible (¿GPS apagado?).',
+        3: 'Se agotó el tiempo de espera.',
+      }[err.code] ?? err.message;
+      alert(motivo);
+    },
+    { enableHighAccuracy: true, timeout: 12000, maximumAge: 30000 }
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
    13. PANEL DE DETALLE
    ═══════════════════════════════════════════════════════════════════════════ */
 
@@ -1075,6 +1164,24 @@ function arrancarReloj() {
 }
 
 async function comprobarRed() {
+  // Sin servidor Node detrás: se sondea una fuente real desde el propio dispositivo.
+  if (!HAY_SERVIDOR) {
+    $('#texto-red').textContent = 'modo app · comprobando…';
+    try {
+      await fetch('https://api.tfl.gov.uk/Place/Type/JamCam', {
+        signal: AbortSignal.timeout(12000),
+        // Evita descargar el catálogo entero solo para comprobar la conexión.
+        headers: { Range: 'bytes=0-64' },
+      });
+      $('#punto-red').className = 'punto vivo';
+      $('#texto-red').textContent = 'modo app · sin conexión al servidor';
+    } catch {
+      $('#punto-red').className = 'punto muerto';
+      $('#texto-red').textContent = 'modo app · sin red';
+    }
+    return;
+  }
+
   try {
     const r = await fetch('/api/estado', { signal: AbortSignal.timeout(12000) });
     const d = await r.json();
@@ -1083,9 +1190,6 @@ async function comprobarRed() {
     $('#texto-red').textContent = vivo
       ? `fuentes alcanzables · ${d.sondas.filter((s) => s.alcanzable).length}/${d.sondas.length}`
       : 'sin salida a Internet · modo respaldo';
-    if (!vivo) {
-      $('#texto-red').textContent = 'sin salida a Internet · modo respaldo';
-    }
   } catch {
     $('#punto-red').className = 'punto muerto';
     $('#texto-red').textContent = 'servidor no responde';
@@ -1100,6 +1204,7 @@ async function iniciar() {
   // Cableado de la interfaz
   $('#btn-capas').addEventListener('click', () => $('#panel-capas').classList.toggle('oculto'));
   $('#btn-recentrar').addEventListener('click', () => mapa.setView([35, 5], 3));
+  $('#btn-ubicacion').addEventListener('click', irAMiUbicacion);
   $('#btn-legal').addEventListener('click', () => $('#modal-legal').classList.remove('oculto'));
   $('#btn-refrescar').addEventListener('click', async () => {
     for (const c of Object.values(estado.capas)) await c.refrescar();
