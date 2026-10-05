@@ -47,9 +47,11 @@ En la pantalla siguiente:
 Pulsa **Finish** y espera a que Gradle termine la primera sincronización. Tarda
 un rato: está descargando el SDK y las dependencias de Compose.
 
-**Por qué API 24:** osmdroid necesita 23 o superior y Compose también. 24 deja
-fuera solo dispositivos de 2016 y anteriores, y a cambio evita las molestias de
-los permisos antiguos.
+**Por qué API 24:** es el mínimo que se comporta igual en todos los teléfonos
+que vas a encontrar. Compose funciona desde API 21, pero por debajo de API 23
+existe todavía el modelo antiguo de permisos —se conceden al instalar— y eso
+obligaría a mantener dos caminos de código para algo que no aporta nada: un
+teléfono de 2016 o anterior no mueve bien este mapa.
 
 ---
 
