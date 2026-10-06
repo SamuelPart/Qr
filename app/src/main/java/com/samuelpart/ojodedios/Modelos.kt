@@ -11,11 +11,11 @@ enum class IdCapa(
 ) {
     CAMARAS(
         "Cámaras públicas", "Observación directa",
-        "Tráfico oficial: Londres y Finlandia", porDefecto = true,
+        "Tráfico oficial: Londres, Finlandia, Hong Kong y Singapur", porDefecto = true,
     ),
     SATELITES(
         "Satélites", "Órbita",
-        "Posición calculada en el teléfono con SGP4", porDefecto = true,
+        "SGP4 en el teléfono · a su altitud real en el globo 3D", porDefecto = true,
     ),
     SISMOS(
         "Sismos", "Atmósfera y terreno",

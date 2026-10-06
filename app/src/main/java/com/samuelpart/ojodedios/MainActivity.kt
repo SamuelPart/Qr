@@ -29,6 +29,9 @@ class MainActivity : ComponentActivity() {
     private val modelo: OjoViewModel by viewModels()
     private var mapa: MapView? = null
 
+    /** Se guarda para saber si el globo 3D tiene el mapa tapado. */
+    private var controladorMapa: ControladorMapa? = null
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -37,7 +40,9 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             TemaOjoDeDios {
-                val controlador = remember { ControladorMapa(this) }
+                val controlador = remember {
+                    ControladorMapa(this).also { controladorMapa = it }
+                }
                 var fuenteBase by remember {
                     mutableStateOf(
                         if (Fuentes.sistemaEnOscuro(this)) Fuentes.CARTO_OSCURO
@@ -64,7 +69,9 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        mapa?.onResume()
+        // Si el globo 3D está delante, el mapa se queda pausado: lo releva el
+        // globo y no tiene sentido que siga descargando mosaicos por detrás.
+        if (controladorMapa?.tapado != true) mapa?.onResume()
     }
 
     override fun onPause() {

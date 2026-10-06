@@ -52,6 +52,14 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 /**
+ * La atribución del globo 3D. En el mapa de mosaicos cada proveedor trae la
+ * suya; aquí el planeta es la Blue Marble de la NASA y las órbitas las calcula
+ * el propio teléfono a partir de los elementos que publica CelesTrak.
+ */
+private const val ATRIBUCION_GLOBO =
+    "NASA Blue Marble (dominio público, GIBS) · CelesTrak + SGP4 en el dispositivo"
+
+/**
  * Pantalla principal: mapa a pantalla completa con una capa de controles
  * flotantes por encima, al estilo de un HUD de instrumentos.
  */
@@ -75,43 +83,63 @@ fun PantallaOjoDeDios(
     var panelCapasAbierto by remember { mutableStateOf(false) }
     var detalleAbierto by remember { mutableStateOf(false) }
     var legalAbierto by remember { mutableStateOf(false) }
+
+    /** Falso: mapa de mosaicos. Verdadero: globo terráqueo en 3D. */
+    var modoGlobo by remember { mutableStateOf(false) }
     val estadoPanel = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val estadoDetalle = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val estadoLegal = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     Box(Modifier.fillMaxSize().background(Colores.Fondo)) {
 
-        MapaOjoDeDios(
-            controlador = controlador,
-            puntos = puntos,
-            satelites = satelites,
-            fuenteBase = fuenteBase,
-            fuenteRadar = fuenteRadar,
-            fuenteNasa = fuenteNasa,
-            miUbicacion = miUbicacion,
-            centroInicial = 35.0 to 5.0,
-            alTocarPunto = { vm.seleccionar(it); detalleAbierto = true },
-            alTocarSatelite = { s ->
-                vm.seleccionar(
-                    PuntoMapa(
-                        id = "sat-${s.satelite.norad}",
-                        nombre = s.satelite.nombre,
-                        lat = s.lat, lon = s.lon,
-                        capa = IdCapa.SATELITES,
-                        fuente = "CelesTrak · cálculo local con SGP4",
-                        detalle = listOf(
-                            "Tipo" to descripcionTipo(s.satelite.tipo),
-                            "Latitud" to "%.3f°".format(s.lat),
-                            "Longitud" to "%.3f°".format(s.lon),
-                            "Altitud" to "%.1f km".format(s.altitudKm),
-                            "NORAD" to s.satelite.norad.toString(),
-                        ),
+        // El mapa 2D y el globo 3D se turnan en el mismo sitio: solo se compone
+        // uno, así que el otro ni dibuja ni gasta batería. El MapView no pierde
+        // nada al desaparecer, porque el objeto sigue vivo en el controlador:
+        // al volver está donde se dejó, con su zoom y sus capas.
+        if (modoGlobo) {
+            GloboOjoDeDios(
+                satelites = satelites,
+                modifier = Modifier.fillMaxSize(),
+            )
+        } else {
+            MapaOjoDeDios(
+                controlador = controlador,
+                puntos = puntos,
+                satelites = satelites,
+                fuenteBase = fuenteBase,
+                fuenteRadar = fuenteRadar,
+                fuenteNasa = fuenteNasa,
+                miUbicacion = miUbicacion,
+                centroInicial = 35.0 to 5.0,
+                alTocarPunto = { vm.seleccionar(it); detalleAbierto = true },
+                alTocarSatelite = { s ->
+                    vm.seleccionar(
+                        PuntoMapa(
+                            id = "sat-${s.satelite.norad}",
+                            nombre = s.satelite.nombre,
+                            lat = s.lat, lon = s.lon,
+                            capa = IdCapa.SATELITES,
+                            fuente = "CelesTrak · cálculo local con SGP4",
+                            detalle = listOf(
+                                "Tipo" to descripcionTipo(s.satelite.tipo),
+                                "Latitud" to "%.3f°".format(s.lat),
+                                "Longitud" to "%.3f°".format(s.lon),
+                                "Altitud" to "%.1f km".format(s.altitudKm),
+                                "NORAD" to s.satelite.norad.toString(),
+                            ),
+                        )
                     )
-                )
-                detalleAbierto = true
-            },
-            alMoverMapa = { },
-        )
+                    detalleAbierto = true
+                },
+                alMoverMapa = { },
+            )
+        }
+
+        // Girar y acercar el globo son cosa suya; el mapa, mientras está
+        // tapado, deja de descargar mosaicos.
+        LaunchedEffect(modoGlobo) {
+            if (modoGlobo) controlador.tapar() else controlador.destapar()
+        }
 
         // ─────────── Cabecera HUD ───────────
         Column(
@@ -154,7 +182,7 @@ fun PantallaOjoDeDios(
             // CARTO y de OpenStreetMap exigen que se muestre, y cambia sola al
             // cambiar de fondo, porque cada fuente trae la suya.
             Text(
-                fuenteBase.atribucion,
+                if (modoGlobo) ATRIBUCION_GLOBO else fuenteBase.atribucion,
                 style = MaterialTheme.typography.labelSmall,
                 color = Colores.TextoTenue,
                 modifier = Modifier.padding(start = 14.dp, end = 14.dp, bottom = 6.dp),
@@ -162,15 +190,39 @@ fun PantallaOjoDeDios(
         }
 
         // ─────────── Botonera inferior ───────────
-        Row(
+        Column(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .padding(16.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            BotonHud("Capas") { panelCapasAbierto = true }
-            BotonHud("Mi ubicación") { alPedirUbicacion() }
-            BotonHud("Global") { controlador.moverA(35.0, 5.0, 3.0) }
+            if (modoGlobo) {
+                Text(
+                    "arrastra para girar · pellizca para acercar · cada punto va a su altitud real",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Colores.TextoTenue,
+                    modifier = Modifier.padding(bottom = 10.dp),
+                )
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                BotonHud("Capas") { panelCapasAbierto = true }
+                BotonHud(if (modoGlobo) "Mapa 2D" else "Globo 3D") {
+                    val entrando = !modoGlobo
+                    modoGlobo = entrando
+                    // El globo dibuja satélites y órbitas. Si esa capa está
+                    // apagada se enciende al entrar: un planeta vacío no
+                    // explica nada y parece que la app se ha roto.
+                    if (entrando && capas[IdCapa.SATELITES]?.activa != true) {
+                        vm.alternar(IdCapa.SATELITES, controlador.centro())
+                    }
+                }
+                // Estas dos mueven el mapa, así que en el globo no tienen
+                // sentido: el globo se maneja con el dedo.
+                if (!modoGlobo) {
+                    BotonHud("Mi ubicación") { alPedirUbicacion() }
+                    BotonHud("Global") { controlador.moverA(35.0, 5.0, 3.0) }
+                }
+            }
         }
     }
 
@@ -187,6 +239,16 @@ fun PantallaOjoDeDios(
                 color = Colores.Cian,
                 modifier = Modifier.padding(start = 20.dp, bottom = 8.dp),
             )
+            if (modoGlobo) {
+                Text(
+                    "Estás en el globo 3D, que dibuja satélites y órbitas. Las " +
+                        "cámaras, los sismos, los vuelos, los barcos y el radar " +
+                        "se ven en el mapa 2D.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Colores.Ambar,
+                    modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 8.dp),
+                )
+            }
             LazyColumn(Modifier.heightIn(max = 520.dp)) {
                 for (grupo in capas.values.map { it.capa.grupo }.distinct()) {
                     item {
