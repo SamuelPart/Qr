@@ -104,7 +104,7 @@ Siete capas, todas de fuentes que su operador publica de forma abierta:
 
 | Capa | Fuente | Cómo se obtiene |
 |---|---|---|
-| **Cámaras públicas** | TfL (Londres) · Fintraffic (Finlandia) | Fotograma JPG, refresco cada 30 s |
+| **Cámaras públicas** | TfL (Londres) · Fintraffic (Finlandia) · TD (Hong Kong) · LTA (Singapur) | Fotograma JPG, refresco cada 30 s |
 | **Satélites** | CelesTrak | **Calculado en el teléfono con SGP4**, con traza orbital |
 | **Sismos** | USGS | Últimas 24 h, con respaldo empaquetado |
 | **Vuelos** | airplanes.live | ADS-B alrededor del centro del mapa |
@@ -116,6 +116,25 @@ La capa de satélites es la más interesante: **no pide posiciones a nadie**. Le
 los elementos orbitales del paquete de la app y resuelve la órbita en el
 dispositivo, así que funciona sin conexión y cualquiera puede reproducir el
 cálculo.
+
+### El globo 3D
+
+El botón **Globo 3D** de la botonera cambia el mapa de mosaicos por un planeta
+dibujado con **OpenGL ES 2.0 del propio Android**: ni una dependencia más, ni
+una clave, ni una cuenta. La geografía es la *Blue Marble* de la NASA (dominio
+público, servida por GIBS) y el terminador de día y noche se calcula en el
+teléfono con la hora UTC.
+
+Lo que aporta frente al mapa plano es la tercera dimensión de verdad: los
+satélites se dibujan **a su altitud real**, así que se ve de un vistazo que la
+Estación Espacial va pegada al suelo y que el anillo geoestacionario está
+35 786 km más arriba. Las trazas orbitales también van en 3D, de modo que las
+inclinaciones se leen sin esfuerzo.
+
+Se maneja con el dedo: arrastrar gira el globo, pellizcar acerca y aleja. Si no
+hay red la primera vez, el globo se queda en océano azul con meridianos y
+paralelos, y los satélites se ven igual: la textura es lo único que necesita
+conexión, y a partir de la segunda apertura queda en la caché de la app.
 
 El botón **Límites legales**, arriba a la derecha, abre la explicación de dónde
 está la frontera entre consultar datos abiertos y cometer un delito.
@@ -142,7 +161,7 @@ está la frontera entre consultar datos abiertos y cometer un delito.
 └── gradle/wrapper/                  Gradle 8.11.1
 ```
 
-Los once archivos Kotlin, y qué hace cada uno:
+Los doce archivos Kotlin, y qué hace cada uno:
 
 | Archivo | Responsabilidad |
 |---|---|
@@ -153,6 +172,7 @@ Los once archivos Kotlin, y qué hace cada uno:
 | `Repositorio.kt` | Un método por feed, todos normalizados a `PuntoMapa` |
 | `OjoViewModel.kt` | Estado, carga de capas y reloj de 1 Hz |
 | `Mapa.kt` | `ControladorMapa` (osmdroid) y su composable |
+| `Globo.kt` | El globo 3D: `GLSurfaceView` con esfera, textura, rejilla y terminador |
 | `Interfaz.kt` | HUD, panel de capas y ficha de detalle |
 | `Legal.kt` | El panel "Límites legales" |
 | `Tema.kt` | Paleta y tipografía |
@@ -176,6 +196,17 @@ API, cuenta de Google ni registro. Todo lo demás es AndroidX y Compose.
 - **La transparencia de las capas de mosaicos** se hace con un
   `ColorMatrixColorFilter`, porque osmdroid no expone `setOpacity`.
 - **El escucha del mapa se instala una sola vez**, no en cada recomposición.
+- **El globo es propio, no de una librería de mapas.** MapLibre Native todavía
+  no tiene globo (solo su versión web) y el de Google exige cuenta de
+  facturación con tarjeta. Se dibuja con `GLSurfaceView` y GLES 2.0: una
+  esfera, una textura y unas líneas. Cero dependencias nuevas.
+- **El globo solo dibuja cuando hace falta** (`RENDERMODE_WHEN_DIRTY`) y,
+  mientras está delante, el mapa de mosaicos se pausa: no se descarga nada que
+  nadie vaya a ver.
+- **Las cámaras de Hong Kong se recortan a 240** de las ~800 que publica su
+  Departamento de Transporte. Dibujar ochocientas más en un mapa que ya lleva
+  mil cuatrocientas no aporta nada; la interfaz dice el total en la nota de la
+  capa, para que el recorte no parezca un error.
 
 ---
 

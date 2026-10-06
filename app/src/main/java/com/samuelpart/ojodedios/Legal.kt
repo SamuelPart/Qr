@@ -41,9 +41,10 @@ private val contenido = listOf(
     Bloque(
         titulo = "Lo que sí es público",
         vinetas = listOf(
-            "Cámaras de tráfico oficiales. TfL (Londres) y Fintraffic (Finlandia) " +
-                "publican sus cámaras como datos abiertos. Las ves porque el Estado " +
-                "decidió publicarlas.",
+            "Cámaras de tráfico oficiales. TfL (Londres), Fintraffic (Finlandia), el " +
+                "Departamento de Transporte de Hong Kong y la autoridad de transporte " +
+                "de Singapur publican sus cámaras como datos abiertos. Las ves porque " +
+                "el organismo decidió publicarlas.",
             "Vuelos. Las aeronaves emiten su posición por radio en abierto (ADS-B). " +
                 "Cualquiera con un receptor barato la capta: no es una filtración, es " +
                 "una emisión.",

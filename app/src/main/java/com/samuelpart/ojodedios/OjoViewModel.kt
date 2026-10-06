@@ -123,38 +123,51 @@ class OjoViewModel(app: Application) : AndroidViewModel(app) {
 
     // ─────────────────────── Cargadores ───────────────────────
 
-    /** Cámaras: dos fuentes independientes; si una falla, la otra sigue. */
+    /**
+     * Cámaras: cuatro redes oficiales independientes. Si una falla, las otras
+     * tres siguen; la nota de la capa dice cuántas aportó cada una.
+     */
     private fun cargarCamaras() {
         viewModelScope.launch {
-            var total = 0
+            val fuentes = listOf<Pair<String, suspend () -> List<PuntoMapa>>>(
+                "Londres" to { repositorio.camarasLondres() },
+                "Finlandia" to { repositorio.camarasFinlandia() },
+                "Hong Kong" to { repositorio.camarasHongKong() },
+                "Singapur" to { repositorio.camarasSingapur() },
+            )
+
             val notas = mutableListOf<String>()
+            val encontradas = mutableListOf<PuntoMapa>()
 
-            try {
-                val londres = withContext(Dispatchers.IO) { repositorio.camarasLondres() }
-                acumulado[IdCapa.CAMARAS] = (acumulado[IdCapa.CAMARAS] ?: emptyList()) + londres
-                total += londres.size
-                notas.add("Londres ${londres.size}")
-            } catch (e: Exception) {
-                notas.add("Londres sin datos")
+            for ((nombre, fuente) in fuentes) {
+                try {
+                    val datos = withContext(Dispatchers.IO) { fuente() }
+                    encontradas.addAll(datos)
+                    notas.add(
+                        // Hong Kong publica muchas más cámaras de las que se
+                        // dibujan, así que se dice el total en vez de callarlo.
+                        if (nombre == "Hong Kong" &&
+                            repositorio.publicadasHongKong > datos.size
+                        ) {
+                            "Hong Kong ${datos.size} de ${repositorio.publicadasHongKong}"
+                        } else if (datos.isEmpty()) {
+                            "$nombre sin datos"
+                        } else {
+                            "$nombre ${datos.size}"
+                        }
+                    )
+                } catch (e: Exception) {
+                    notas.add("$nombre sin datos")
+                }
             }
 
-            try {
-                val finlandia = withContext(Dispatchers.IO) { repositorio.camarasFinlandia() }
-                val sinDuplicados = (acumulado[IdCapa.CAMARAS] ?: emptyList())
-                    .filterNot { p -> p.id.startsWith("fi-") } + finlandia
-                acumulado[IdCapa.CAMARAS] = sinDuplicados
-                total += finlandia.size
-                notas.add("Finlandia ${finlandia.size}")
-            } catch (e: Exception) {
-                notas.add("Finlandia sin datos")
-            }
-
+            acumulado[IdCapa.CAMARAS] = encontradas
             _puntos.value = acumulado.values.flatten()
             marcar(IdCapa.CAMARAS) {
                 it.copy(
                     cargando = false,
-                    objetos = acumulado[IdCapa.CAMARAS]?.size ?: 0,
-                    origen = if (total > 0) OrigenDatos.VIVO else OrigenDatos.ERROR,
+                    objetos = encontradas.size,
+                    origen = if (encontradas.isEmpty()) OrigenDatos.ERROR else OrigenDatos.VIVO,
                     nota = notas.joinToString(" · "),
                 )
             }

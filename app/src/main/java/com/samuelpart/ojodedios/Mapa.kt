@@ -58,6 +58,26 @@ class ControladorMapa(contexto: Context) {
         if (zoom != null) vista.controller.setZoom(zoom)
     }
 
+    /**
+     * El globo 3D tapa el mapa: mientras esté delante, osmdroid deja de pedir
+     * mosaicos, porque no tiene sentido gastar datos en un mapa que nadie ve.
+     * Ni el estado ni la vista se pierden: solo se pausa la descarga.
+     */
+    var tapado: Boolean = false
+        private set
+
+    fun tapar() {
+        if (tapado) return
+        tapado = true
+        vista.onPause()
+    }
+
+    fun destapar() {
+        if (!tapado) return
+        tapado = false
+        vista.onResume()
+    }
+
     // ─────────────────────── Capa base ───────────────────────
 
     fun cambiarBase(fuente: FuentePlantilla) {

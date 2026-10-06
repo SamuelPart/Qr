@@ -44,6 +44,33 @@ object Red {
             }
         }
 
+    /**
+     * Descarga binaria, para lo que tiene que llegar entero: la textura del
+     * globo, por ejemplo. Un JPEG no sobrevive a la conversión a cadena.
+     */
+    suspend fun bytes(url: String, tiempoMaxMs: Int = 30_000): ByteArray =
+        withContext(Dispatchers.IO) {
+            val conexion = (URL(url).openConnection() as HttpURLConnection).apply {
+                connectTimeout = tiempoMaxMs
+                readTimeout = tiempoMaxMs
+                requestMethod = "GET"
+                instanceFollowRedirects = true
+                setRequestProperty("User-Agent", AGENTE)
+                setRequestProperty("Accept", "image/jpeg, image/png, */*")
+            }
+            try {
+                val codigo = conexion.responseCode
+                if (codigo !in 200..299) throw ErrorRed("HTTP $codigo")
+                conexion.inputStream.use { it.readBytes() }
+            } catch (e: ErrorRed) {
+                throw e
+            } catch (e: Exception) {
+                throw ErrorRed(e.message ?: "fallo de red")
+            } finally {
+                conexion.disconnect()
+            }
+        }
+
     suspend fun objeto(url: String): JSONObject = JSONObject(texto(url))
 
     suspend fun arreglo(url: String): JSONArray = JSONArray(texto(url))
