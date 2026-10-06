@@ -40,6 +40,26 @@ enum class IdCapa(
 }
 
 /**
+ * Color con el que cada capa se dibuja sobre el globo. Son los mismos de la
+ * paleta del HUD, para que el punto de la leyenda y el del planeta coincidan:
+ * si aquí se cambia uno, allí deja de mentir.
+ */
+val IdCapa.colorEnGlobo: FloatArray
+    get() = when (this) {
+        IdCapa.CAMARAS -> floatArrayOf(0.13f, 0.83f, 0.93f)   // cian
+        IdCapa.SATELITES -> floatArrayOf(0.98f, 0.75f, 0.25f) // ámbar claro
+        IdCapa.SISMOS -> floatArrayOf(0.96f, 0.62f, 0.04f)    // ámbar
+        IdCapa.VUELOS -> floatArrayOf(0.20f, 0.83f, 0.60f)    // verde
+        IdCapa.BARCOS -> floatArrayOf(0.65f, 0.55f, 0.98f)    // violeta
+        // Radar e imagen de la NASA no son puntos: tiñen el planeta entero.
+        IdCapa.RADAR -> floatArrayOf(0.44f, 0.72f, 0.94f)
+        IdCapa.NASA -> floatArrayOf(0.44f, 0.72f, 0.94f)
+    }
+
+/** Rojo de alerta, para lo que la fuente marca como destacado. */
+val COLOR_DESTACADO = floatArrayOf(0.94f, 0.27f, 0.27f)
+
+/**
  * Un punto cualquiera del mapa: cámara, avión, barco, sismo o satélite.
  * Se unifica para que el mapa y la ficha de detalle traten todo igual.
  */
