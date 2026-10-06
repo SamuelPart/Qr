@@ -131,8 +131,27 @@ Estación Espacial va pegada al suelo y que el anillo geoestacionario está
 35 786 km más arriba. Las trazas orbitales también van en 3D, de modo que las
 inclinaciones se leen sin esfuerzo.
 
-Se maneja con el dedo: arrastrar gira el globo, pellizcar acerca y aleja. Si no
-hay red la primera vez, el globo se queda en océano azul con meridianos y
+Se maneja con el dedo:
+
+- **Arrastrar** gira el globo. La sensibilidad se calcula con el tamaño de la
+  pantalla —de un borde al otro es media vuelta—, así que no se descontrola en
+  un móvil grande.
+- **Pellizcar** acerca y aleja.
+- **Doble toque** pone de frente el punto tocado y acerca un paso. Es la forma
+  de llegar a un sitio concreto: acercarse sin más empujaba hacia el borde todo
+  lo que no estuviera justo en el centro, que es el efecto de «quiero acercarme
+  a algo y se me va a otro lado». El centrado se resuelve con un método de
+  Newton sobre los dos ángulos del globo, y converge siempre.
+
+El acercamiento tiene un tope, y no es una limitación que se pueda quitar
+compilando otra cosa: la geografía del globo es el mapamundi de la NASA, unos
+**10 km por píxel** y con un día de antigüedad. Acercarse más solo enseña una
+mancha borrosa. Cuando alguien llega al tope, la app lo explica y ofrece el
+mapa 2D, que sí tiene calles. Para que se note lo menos posible, la textura es
+de 4096×2048, lleva *mipmaps* y el globo la encoge solo si el teléfono no
+admite ese tamaño.
+
+Si no hay red la primera vez, el globo se queda en océano azul con meridianos y
 paralelos, y los satélites se ven igual: la textura es lo único que necesita
 conexión, y a partir de la segunda apertura queda en la caché de la app.
 
@@ -282,6 +301,21 @@ tres razones:
 
 **Las cámaras de Londres no cargan**
 La API de TfL limita peticiones por IP. Espera un minuto y refresca.
+
+**En el globo 3D, el tráfico se ve borroso al acercarse**
+No es un fallo: es hasta donde llega el mapamundi. La textura es la Blue
+Marble de la NASA, unos 10 km por píxel y con un día de antigüedad, así que a
+poca distancia la costa se deshace. La app avisa cuando se llega al tope y
+ofrece el mapa 2D, que sí tiene calles. Lo que **no** existe es una fuente
+abierta con más detalle: ni la NASA, ni el USGS, ni ningún catálogo público
+ofrecen imagen de menos de 250 m por píxel, y todas llegan con horas o días de
+retraso. El globo sirve para ver el planeta y las órbitas, no para mirar
+tráfico.
+
+**En el globo 3D, el fondo sale de un color plano**
+Es lo esperado cuando no hay red: el globo dibuja su océano, la rejilla de
+meridianos y paralelos, y los satélites. La textura se guarda en caché, así que
+basta con haber abierto la app una vez con conexión.
 
 ---
 

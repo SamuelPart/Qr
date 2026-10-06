@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -86,6 +87,9 @@ fun PantallaOjoDeDios(
 
     /** Falso: mapa de mosaicos. Verdadero: globo terráqueo en 3D. */
     var modoGlobo by remember { mutableStateOf(false) }
+
+    /** Se enseña cuando alguien intenta acercarse en el globo más allá del tope. */
+    var avisoDetalle by remember { mutableStateOf(false) }
     val estadoPanel = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val estadoDetalle = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val estadoLegal = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -100,6 +104,7 @@ fun PantallaOjoDeDios(
             GloboOjoDeDios(
                 satelites = satelites,
                 modifier = Modifier.fillMaxSize(),
+                alPedirMasDetalle = { avisoDetalle = true },
             )
         } else {
             MapaOjoDeDios(
@@ -198,7 +203,8 @@ fun PantallaOjoDeDios(
         ) {
             if (modoGlobo) {
                 Text(
-                    "arrastra para girar · pellizca para acercar · cada punto va a su altitud real",
+                    "arrastra para girar · pellizca para acercar · " +
+                        "toca dos veces algo para ponerlo de frente",
                     style = MaterialTheme.typography.labelSmall,
                     color = Colores.TextoTenue,
                     modifier = Modifier.padding(bottom = 10.dp),
@@ -318,6 +324,58 @@ fun PantallaOjoDeDios(
                 item { Spacer(Modifier.height(28.dp)) }
             }
         }
+    }
+
+    // ─────────── Hasta dónde llega el globo ───────────
+    if (avisoDetalle) {
+        AlertDialog(
+            onDismissRequest = { avisoDetalle = false },
+            containerColor = Colores.PanelSuave,
+            title = {
+                Text("Hasta aquí llega el globo", color = Colores.Texto)
+            },
+            text = {
+                Text(
+                    "La geografía del globo es el mapamundi de la NASA, de " +
+                        "dominio público: unos 10 km por píxel. Tiene la " +
+                        "antigüedad de un día, así que tampoco hay nubes de hoy. " +
+                        "No existe ninguna fuente abierta con más detalle que " +
+                        "esto: si pudieras seguir acercándote, solo verías una " +
+                        "mancha borrosa.\n\n" +
+                        "El tráfico de las cámaras se ve en el mapa 2D, que sí " +
+                        "tiene calles y se puede acercar hasta el nivel de " +
+                        "portal.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Colores.Texto,
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        avisoDetalle = false
+                        // Lo que se está buscando —tráfico— está en el mapa 2D.
+                        modoGlobo = false
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Colores.CianTenue,
+                        contentColor = Colores.Cian,
+                    ),
+                ) {
+                    Text("Ir al mapa 2D")
+                }
+            },
+            dismissButton = {
+                Button(
+                    onClick = { avisoDetalle = false },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Colores.Panel,
+                        contentColor = Colores.Texto,
+                    ),
+                ) {
+                    Text("Seguir aquí")
+                }
+            },
+        )
     }
 
     // ─────────── Límites legales ───────────
