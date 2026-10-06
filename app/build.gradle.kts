@@ -10,22 +10,42 @@ plugins {
  * Clave de CARTO, si la hay.
  *
  * No se escribe en el repositorio a propósito: es público, y una clave ahí la
- * puede copiar cualquiera para gastar tu cuota. Vive en `local.properties`,
- * que Android Studio ya crea y que está en .gitignore.
+ * puede copiar cualquiera para gastar tu cuota. Se busca, por este orden, en:
  *
- *   carto.apiKey=cb1_...
+ *   1. local.properties de la raíz  →  carto.apiKey=cb1_...
+ *   2. ~/.gradle/gradle.properties  →  carto.apiKey=cb1_...
  *
  * Si no está, la compilación sigue funcionando: los mapas de CARTO se ven con
- * la marca de agua «API KEY REQUIRED», que es el comportamiento documentado
- * de CARTO cuando la petición va sin clave.
+ * la marca de agua «API KEY REQUIRED», que es lo que hace CARTO cuando la
+ * petición va sin clave válida.
  */
 val claveCarto: String = run {
-    val archivo = rootProject.file("local.properties")
-    if (!archivo.exists()) return@run ""
     val propiedades = Properties()
-    archivo.inputStream().use { propiedades.load(it) }
-    // Se quitan los espacios por si el correo partió la clave en dos líneas.
-    propiedades.getProperty("carto.apiKey").orEmpty().replace(Regex("\\s+"), "")
+    val archivo = rootProject.file("local.properties")
+    if (archivo.exists()) archivo.inputStream().use { propiedades.load(it) }
+
+    val nombres = listOf("carto.apiKey", "carto.apikey", "carto.key", "CARTO_KEY", "cartoKey")
+    val deLocal = nombres.firstNotNullOfOrNull { propiedades.getProperty(it) }
+    val deGradle = providers.gradleProperty("carto.apiKey").orNull
+
+    // Se quitan espacios y saltos de línea: el correo de CARTO parte la clave
+    // en dos líneas con facilidad.
+    (deLocal ?: deGradle).orEmpty().trim().replace(Regex("\\s+"), "")
+}
+
+// Deja constancia en la ventana Build de si la clave llegó o no. Sin esto, un
+// fallo de cableado y una clave inválida se ven exactamente igual: la marca de
+// agua en el mapa.
+if (claveCarto.isBlank()) {
+    logger.lifecycle(
+        "CARTO: SIN CLAVE. Los fondos de mapa saldrán con la marca de agua " +
+            "«API KEY REQUIRED». Añade carto.apiKey=tu_clave a local.properties"
+    )
+} else {
+    logger.lifecycle(
+        "CARTO: clave cargada — ${claveCarto.length} caracteres " +
+            "(${claveCarto.take(8)}…${claveCarto.takeLast(4)})"
+    )
 }
 
 android {

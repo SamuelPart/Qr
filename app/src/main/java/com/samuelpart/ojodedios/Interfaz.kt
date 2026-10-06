@@ -234,6 +234,20 @@ fun PantallaOjoDeDios(
                         }
                     }
                 }
+
+                if (Fuentes.cartoSinClave) {
+                    item {
+                        Text(
+                            "Los fondos oscuro y claro son de CARTO y saldrán con la marca " +
+                                "de agua «API KEY REQUIRED». Pide una clave gratuita en " +
+                                "carto.com/basemaps/apikey y añade a local.properties: " +
+                                "carto.apiKey=tu_clave — después vuelve a compilar.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Colores.Ambar,
+                            modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
+                        )
+                    }
+                }
                 item {
                     BotonAncho("Refrescar capas activas") {
                         vm.refrescarTodo(controlador.centro())

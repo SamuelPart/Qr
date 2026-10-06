@@ -61,6 +61,13 @@ object Fuentes {
     private val CLAVE_CARTO: String = BuildConfig.CARTO_KEY
 
     /**
+     * true si falta la clave. La interfaz lo avisa en el panel de capas: sin
+     * este dato, una clave mal cableada y una clave inválida se ven igual, y
+     * desde fuera parecen «la app está rota».
+     */
+    val cartoSinClave: Boolean get() = CLAVE_CARTO.isBlank()
+
+    /**
      * URL de un estilo ráster de CARTO.
      *
      * Desde finales de 2026 el CDN marca con agua todo mosaico que no lleve la
