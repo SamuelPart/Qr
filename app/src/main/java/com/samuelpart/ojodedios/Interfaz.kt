@@ -114,35 +114,51 @@ fun PantallaOjoDeDios(
         )
 
         // ─────────── Cabecera HUD ───────────
-        Row(
-            modifier = Modifier
+        Column(
+            Modifier
+                .align(Alignment.TopStart)
                 .fillMaxWidth()
                 .background(Colores.Panel)
-                .padding(horizontal = 14.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Box(
-                Modifier
-                    .size(10.dp)
-                    .clip(CircleShape)
-                    .background(Colores.Cian)
-            )
-            Spacer(Modifier.width(10.dp))
-            Column(Modifier.weight(1f)) {
-                Text(
-                    "OJO DE DIOS",
-                    style = MaterialTheme.typography.titleLarge,
-                    color = Colores.Texto,
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Box(
+                    Modifier
+                        .size(10.dp)
+                        .clip(CircleShape)
+                        .background(Colores.Cian)
                 )
-                Text(
-                    "solo fuentes públicas abiertas",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = Colores.TextoTenue,
-                )
+                Spacer(Modifier.width(10.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        "OJO DE DIOS",
+                        style = MaterialTheme.typography.titleLarge,
+                        color = Colores.Texto,
+                    )
+                    Text(
+                        "solo fuentes públicas abiertas",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Colores.TextoTenue,
+                    )
+                }
+                BotonFondo("Límites legales", activo = legalAbierto) { legalAbierto = true }
+                Spacer(Modifier.width(12.dp))
+                ContadorObjetos(puntos.size + satelites.size)
             }
-            BotonFondo("Límites legales", activo = legalAbierto) { legalAbierto = true }
-            Spacer(Modifier.width(12.dp))
-            ContadorObjetos(puntos.size + satelites.size)
+
+            // Atribución del fondo de mapa. No es decoración: los términos de
+            // CARTO y de OpenStreetMap exigen que se muestre, y cambia sola al
+            // cambiar de fondo, porque cada fuente trae la suya.
+            Text(
+                fuenteBase.atribucion,
+                style = MaterialTheme.typography.labelSmall,
+                color = Colores.TextoTenue,
+                modifier = Modifier.padding(start = 14.dp, end = 14.dp, bottom = 6.dp),
+            )
         }
 
         // ─────────── Botonera inferior ───────────

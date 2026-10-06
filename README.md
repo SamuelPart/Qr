@@ -54,6 +54,40 @@ Android Studio tendrá que descargar la primera vez es el SDK de Android 35.
 
 ---
 
+---
+
+## La clave de CARTO (mapas base)
+
+Desde finales de 2026 el CDN de CARTO devuelve sus mosaicos ráster con la marca
+de agua **«API KEY REQUIRED»** si la petición no lleva clave. La app funciona
+igual —CARTO no bloquea la petición— pero se ve fea. Para quitarla hace falta
+una clave gratuita, que se pide en <https://carto.com/basemaps/apikey>.
+
+**La clave no está escrita en este repositorio** (que es público) ni en el
+código: se lee al compilar desde `local.properties`, un archivo que Android
+Studio ya crea, que cada uno tiene solo en su máquina y que está ignorado por
+git. Añade esta línea al final:
+
+```properties
+carto.apiKey=cb1_tu_clave_aqui
+```
+
+Después, **File → Sync Project with Gradle Files** y vuelve a compilar. Si el
+mapa sigue con la marca de agua, borra los datos de la app o desinstálala: los
+mosaicos ya descargados están en su caché.
+
+Sin esa línea la app compila y funciona, solo que con la marca de agua.
+
+**Sobre la clave:** es gratuita hasta 5 millones de peticiones al mes para uso
+no comercial. En el [panel de
+CARTO](https://dashboard.basemaps.carto.com/) puedes ver el consumo, revocarla o
+ponerle restricciones. Ten en cuenta que la clave viaja dentro del APK y en cada
+petición de mosaico: cualquiera que use la app puede verla. Por eso conviene
+ponerle una restricción de dominio, y por eso no está en el repositorio.
+
+La atribución **«© OpenStreetMap contributors · © CARTO»** se muestra bajo la
+cabecera del mapa. No es decoración: sus términos exigen que esté visible.
+
 ## Qué hace
 
 Siete capas, todas de fuentes que su operador publica de forma abierta:
@@ -193,6 +227,10 @@ Apps → Ojo de Dios → Permisos → Ubicación.
 Mira Logcat filtrando por `com.samuelpart.ojodedios`. Si un TLE tiene mal el
 dígito de control, predict4java lanza excepción; el código la captura y descarta
 ese satélite en vez de caerse. Los 25 que van dentro están verificados uno a uno.
+
+**Sale la marca de agua «API KEY REQUIRED» en el mapa**
+Falta la clave de CARTO. Ver la sección de arriba: una línea en
+`local.properties` y volver a compilar.
 
 **Las cámaras de Londres no cargan**
 La API de TfL limita peticiones por IP. Espera un minuto y refresca.

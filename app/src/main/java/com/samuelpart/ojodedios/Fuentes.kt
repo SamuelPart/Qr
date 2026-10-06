@@ -22,9 +22,10 @@ class FuentePlantilla(
     zoomMin: Int,
     zoomMax: Int,
     tamanoMosaico: Int = 256,
-    copyright: String = "",
+    /** Atribución. CARTO y OpenStreetMap exigen que se vea en el mapa. */
+    val atribucion: String = "",
 ) : OnlineTileSourceBase(
-    nombre, zoomMin, zoomMax, tamanoMosaico, ".png", arrayOf(""), copyright
+    nombre, zoomMin, zoomMax, tamanoMosaico, ".png", arrayOf(""), atribucion
 ) {
     override fun getTileURLString(pMapTileIndex: Long): String {
         val z = MapTileIndex.getZoom(pMapTileIndex)
@@ -45,18 +46,49 @@ class FuentePlantilla(
  */
 object Fuentes {
 
+    /** La línea de atribución que CARTO pide literalmente en sus términos. */
     private const val CARTO_ATRIB =
-        "© OpenStreetMap · © CARTO"
+        "© OpenStreetMap contributors · © CARTO"
+
+    /**
+     * Clave de CARTO, inyectada al compilar desde `local.properties`
+     * (ver app/build.gradle.kts). No está escrita aquí a propósito: el
+     * repositorio es público.
+     *
+     * Si falta, los mosaicos siguen llegando —CARTO no bloquea la petición—
+     * pero con la marca de agua «API KEY REQUIRED» encima.
+     */
+    private val CLAVE_CARTO: String = BuildConfig.CARTO_KEY
+
+    /**
+     * URL de un estilo ráster de CARTO.
+     *
+     * Desde finales de 2026 el CDN marca con agua todo mosaico que no lleve la
+     * clave. El parámetro se llama `key`, no `api_key`, y solo se añade si hay
+     * clave: una petición sin él sigue siendo válida.
+     */
+    private fun urlCarto(estilo: String): String =
+        "https://basemaps.cartocdn.com/rastertiles/$estilo/{z}/{x}/{y}.png" +
+            if (CLAVE_CARTO.isBlank()) "" else "?key=$CLAVE_CARTO"
+
+    /**
+     * osmdroid guarda los mosaicos en caché por nombre de fuente. Si la clave
+     * llega después de haber usado la app sin ella, hay que cambiar también el
+     * nombre: si no, seguirían apareciendo los mosaicos ya guardados, con su
+     * marca de agua, hasta que caducara la caché.
+     */
+    private fun nombreCarto(estilo: String): String =
+        "carto-$estilo" + if (CLAVE_CARTO.isBlank()) "" else "-clave"
 
     val CARTO_OSCURO = FuentePlantilla(
-        "carto-oscuro",
-        "https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
+        nombreCarto("oscuro"),
+        urlCarto("dark_all"),
         0, 19, 256, CARTO_ATRIB,
     )
 
     val CARTO_CLARO = FuentePlantilla(
-        "carto-claro",
-        "https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png",
+        nombreCarto("claro"),
+        urlCarto("light_all"),
         0, 19, 256, CARTO_ATRIB,
     )
 
