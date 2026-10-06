@@ -107,29 +107,46 @@ Siete capas, todas de fuentes que su operador publica de forma abierta:
 | **Cámaras públicas** | TfL (Londres) · Fintraffic (Finlandia) · TD (Hong Kong) · LTA (Singapur) | Fotograma JPG, refresco cada 30 s |
 | **Satélites** | CelesTrak | **Calculado en el teléfono con SGP4**, con traza orbital |
 | **Sismos** | USGS | Últimas 24 h, con respaldo empaquetado |
-| **Vuelos** | airplanes.live | ADS-B alrededor del centro del mapa |
+| **Vuelos** | airplanes.live | ADS-B alrededor de lo que estás mirando |
 | **Barcos** | Digitraffic | AIS del mar Báltico |
 | **Radar de lluvia** | RainViewer | Mosaico del fotograma más reciente |
-| **Imagen NASA** | GIBS / VIIRS | Color verdadero, ~1 día de antigüedad |
+| **Imagen NASA** | GIBS / VIIRS | Color verdadero de hoy, **como planeta del globo** |
+
+La vista es una sola: **el mundo en 3D**, con todas esas capas encima. No hay
+que elegir entre globo y mapa; para bajar a la calle se abre la vista de calle
+desde la ficha de cualquier objeto.
 
 La capa de satélites es la más interesante: **no pide posiciones a nadie**. Lee
 los elementos orbitales del paquete de la app y resuelve la órbita en el
 dispositivo, así que funciona sin conexión y cualquiera puede reproducir el
-cálculo.
+cálculo. Y como el globo tiene altura de verdad, ahí se ve **a qué altura va
+cada uno**.
 
-### El globo 3D
+### El mundo en 3D
 
-El botón **Globo 3D** de la botonera cambia el mapa de mosaicos por un planeta
-dibujado con **OpenGL ES 2.0 del propio Android**: ni una dependencia más, ni
-una clave, ni una cuenta. La geografía es la *Blue Marble* de la NASA (dominio
-público, servida por GIBS) y el terminador de día y noche se calcula en el
-teléfono con la hora UTC.
+La vista es **el planeta entero**, dibujado con **OpenGL ES 2.0 del propio
+Android**: ni una dependencia más, ni una clave, ni una cuenta. La geografía es
+la *Blue Marble* de la NASA (dominio público, servida por GIBS) y el terminador
+de día y noche se calcula en el teléfono con la hora UTC.
 
-Lo que aporta frente al mapa plano es la tercera dimensión de verdad: los
-satélites se dibujan **a su altitud real**, así que se ve de un vistazo que la
-Estación Espacial va pegada al suelo y que el anillo geoestacionario está
-35 786 km más arriba. Las trazas orbitales también van en 3D, de modo que las
-inclinaciones se leen sin esfuerzo.
+Sobre el planeta va **todo**:
+
+| Capa | Cómo se ve en el globo |
+|---|---|
+| Cámaras | Puntos cian donde hay una cámara oficial |
+| Sismos | Ámbar; los de magnitud 5 o más, rojos y más grandes |
+| Vuelos | Puntos verdes, alrededor de la zona que estás mirando |
+| Barcos | Puntos violeta |
+| Satélites | **A su altitud real**, con la traza de su órbita |
+
+Que los satélites vayan a su altitud de verdad es lo que el 3D aporta y un mapa
+plano no puede: se ve de un vistazo que la Estación Espacial va pegada al suelo
+y que el anillo geoestacionario está 35 786 km más arriba. Las trazas orbitales
+también van en 3D, así que las inclinaciones se leen sin esfuerzo.
+
+La capa de la NASA cambia el planeta entero: en vez del relieve, pone la imagen
+en **color verdadero de hoy**, la misma que sirve GIBS. El radar de lluvia, que
+es un mosaico de mosaicos, se queda en la vista de calle.
 
 Se maneja con el dedo:
 
@@ -143,16 +160,23 @@ Se maneja con el dedo:
   a algo y se me va a otro lado». El centrado se resuelve con un método de
   Newton sobre los dos ángulos del globo, y converge siempre.
 
+### La vista de calle
+
 El acercamiento tiene un tope, y no es una limitación que se pueda quitar
 compilando otra cosa: la geografía del globo es el mapamundi de la NASA, unos
 **10 km por píxel** y con un día de antigüedad. Acercarse más solo enseña una
-mancha borrosa. Cuando alguien llega al tope, la app lo explica y ofrece el
-mapa 2D, que sí tiene calles. Para que se note lo menos posible, la textura es
-de 4096×2048, lleva *mipmaps* y el globo la encoge solo si el teléfono no
-admite ese tamaño.
+mancha borrosa. Para que se note lo menos posible, la textura es de 4096×2048,
+lleva *mipmaps* y el globo la encoge solo si el teléfono no admite ese tamaño.
+
+Para ver calles está la **vista de calle**: el mapa de mosaicos de siempre
+—con CARTO de fondo, radar de lluvia y nombres de calle— pero ya no como una
+vista que compite, sino como algo que se abre desde la ficha de un objeto o
+desde el aviso del tope, centrada en lo que estabas mirando, y se cierra con
+«Volver al globo». Mientras está abierta, el globo deja de dibujar; mientras
+está cerrada, el mapa no descarga ni un mosaico.
 
 Si no hay red la primera vez, el globo se queda en océano azul con meridianos y
-paralelos, y los satélites se ven igual: la textura es lo único que necesita
+paralelos, y los puntos se ven igual: la textura es lo único que necesita
 conexión, y a partir de la segunda apertura queda en la caché de la app.
 
 El botón **Límites legales**, arriba a la derecha, abre la explicación de dónde
@@ -190,9 +214,9 @@ Los doce archivos Kotlin, y qué hace cada uno:
 | `Satelites.kt` | SGP4 sobre predict4java: posición y traza orbital |
 | `Repositorio.kt` | Un método por feed, todos normalizados a `PuntoMapa` |
 | `OjoViewModel.kt` | Estado, carga de capas y reloj de 1 Hz |
-| `Mapa.kt` | `ControladorMapa` (osmdroid) y su composable |
-| `Globo.kt` | El globo 3D: `GLSurfaceView` con esfera, textura, rejilla y terminador |
-| `Interfaz.kt` | HUD, panel de capas y ficha de detalle |
+| `Mapa.kt` | `ControladorMapa` (osmdroid), que ahora solo sirve la vista de calle |
+| `Globo.kt` | El mundo en 3D: esfera, texturas, rejilla, terminador, todas las capas y el tacto |
+| `Interfaz.kt` | HUD, panel de capas, ficha de detalle y vista de calle |
 | `Legal.kt` | El panel "Límites legales" |
 | `Tema.kt` | Paleta y tipografía |
 | `MainActivity.kt` | Ciclo de vida del mapa y permiso de ubicación |
@@ -219,9 +243,17 @@ API, cuenta de Google ni registro. Todo lo demás es AndroidX y Compose.
   no tiene globo (solo su versión web) y el de Google exige cuenta de
   facturación con tarjeta. Se dibuja con `GLSurfaceView` y GLES 2.0: una
   esfera, una textura y unas líneas. Cero dependencias nuevas.
-- **El globo solo dibuja cuando hace falta** (`RENDERMODE_WHEN_DIRTY`) y,
-  mientras está delante, el mapa de mosaicos se pausa: no se descarga nada que
-  nadie vaya a ver.
+- **El globo solo dibuja cuando hace falta** (`RENDERMODE_WHEN_DIRTY`) y, como
+  es la única vista, el mapa de mosaicos permanece pausado salvo mientras la
+  vista de calle está abierta: no se descarga ni un mosaico que nadie vaya a
+  ver.
+- **Todos los puntos del globo se agrupan por capa** y se dibujan como puntos
+  de OpenGL, no como objetos individuales: tres mil cámaras, sismos, aviones y
+  barcos son tres mil vértices, que para una tarjeta gráfica es nada.
+- **Tocar un punto no inventa nada**: se proyecta cada objeto a la pantalla con
+  la misma matriz del dibujado y gana el más cercano al dedo dentro de treinta
+  píxeles. Es la misma cuenta que decide qué se ve, así que el punto que
+  responde es siempre el que está debajo del dedo.
 - **Las cámaras de Hong Kong se recortan a 240** de las ~800 que publica su
   Departamento de Transporte. Dibujar ochocientas más en un mapa que ya lleva
   mil cuatrocientas no aporta nada; la interfaz dice el total en la nota de la
@@ -302,20 +334,35 @@ tres razones:
 **Las cámaras de Londres no cargan**
 La API de TfL limita peticiones por IP. Espera un minuto y refresca.
 
-**En el globo 3D, el tráfico se ve borroso al acercarse**
-No es un fallo: es hasta donde llega el mapamundi. La textura es la Blue
-Marble de la NASA, unos 10 km por píxel y con un día de antigüedad, así que a
-poca distancia la costa se deshace. La app avisa cuando se llega al tope y
-ofrece el mapa 2D, que sí tiene calles. Lo que **no** existe es una fuente
-abierta con más detalle: ni la NASA, ni el USGS, ni ningún catálogo público
-ofrecen imagen de menos de 250 m por píxel, y todas llegan con horas o días de
-retraso. El globo sirve para ver el planeta y las órbitas, no para mirar
-tráfico.
+**El tráfico se ve borroso al acercarse en el globo**
+No es un fallo: es hasta donde llega el mapamundi. La textura es la Blue Marble
+de la NASA, unos 10 km por píxel y con un día de antigüedad, así que a poca
+distancia la costa se deshace. La app avisa cuando se llega al tope y ofrece la
+vista de calle. Lo que **no** existe es una fuente abierta con más detalle: ni
+la NASA, ni el USGS, ni ningún catálogo público ofrecen imagen de menos de
+250 m por píxel, y todas llegan con horas o días de retraso. El globo sirve
+para ver el planeta y las órbitas, no para mirar calles.
 
-**En el globo 3D, el fondo sale de un color plano**
+**No encuentro la forma de mirar una calle concreta**
+Toca el punto que te interese —una cámara, por ejemplo— y en su ficha pulsa
+«Ver la calle en el mapa». El botón abre el mapa de mosaicos centrado ahí
+mismo. Para volver, «Volver al globo», arriba a la izquierda.
+
+**El globo no gira hasta donde le pido**
+Puede ser que las coordenadas que has pedido estén a menos de un grado del
+polo: ahí la inclinación necesaria se sale del margen que permite el arrastre
+(±89°) y el punto se queda a un grado del centro. En cualquier otro sitio del
+planeta el punto acaba exactamente en el centro.
+
+**En el globo, el fondo sale de un color plano**
 Es lo esperado cuando no hay red: el globo dibuja su océano, la rejilla de
-meridianos y paralelos, y los satélites. La textura se guarda en caché, así que
-basta con haber abierto la app una vez con conexión.
+meridianos y paralelos, y todos los puntos. La textura se guarda en caché, así
+que basta con haber abierto la app una vez con conexión.
+
+**Pulso la capa de la NASA y no cambia nada**
+Esa capa tarda unos segundos: descarga la imagen de hoy del planeta entero
+(4096×2048, unos 2 MB) y la sube al globo. Si el servicio no la tiene
+publicada, se queda el relieve y la nota de la capa lo dice.
 
 ---
 

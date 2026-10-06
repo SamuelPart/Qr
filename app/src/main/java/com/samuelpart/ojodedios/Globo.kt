@@ -11,8 +11,11 @@ import android.view.MotionEvent
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
@@ -70,6 +73,48 @@ private const val PASOS_CENTRADO = 8
 
 /** Cuánto se acerca el globo con un doble toque. */
 private const val FACTOR_ACERCAMIENTO = 0.7f
+
+/**
+ * Altitud con la que se dibujan los objetos que están en el suelo: cámaras,
+ * sismos, aviones y barcos. Sesenta kilómetros son un pelo sobre la superficie
+ * (un 1 % del radio), lo justo para que el punto no compita con el planeta en
+ * el búfer de profundidad y no parpadee.
+ */
+private const val ALTITUD_MARCADOR_KM = 60.0
+
+/** Tamaño de cada punto en pantalla, en píxeles. */
+private const val TAMANO_PUNTO = 7f
+private const val TAMANO_PUNTO_DESTACADO = 13f
+
+/** Radio de acierto al tocar: 30 píxeles alrededor del punto. */
+private const val RADIO_TACTO_PX = 30f
+
+/**
+ * Holgura al decidir si un punto está tapado por el planeta. En el borde del
+ * disco las dos formas de calcularlo difieren en menos de un píxel; con esta
+ * holgura gana el lado que responde al dedo, que es lo que espera quien toca.
+ */
+private const val MARGEN_BORDE = 0.01f
+
+/** Color de las trazas orbitales. */
+private val COLOR_TRAZA = floatArrayOf(0.66f, 0.56f, 0.98f)
+
+/**
+ * Lo que hay detrás de un punto del globo, para cuando el dedo lo toca.
+ * O es un objeto de una capa, o es un satélite: nunca las dos cosas.
+ */
+private class Objetivo(
+    val punto: PuntoMapa? = null,
+    val satelite: SateliteEnVuelo? = null,
+)
+
+/** Puntos del mismo color y tamaño, con sus objetivos en el mismo orden. */
+private class GrupoPuntos(
+    val color: FloatArray,
+    val tamano: Float,
+    val posiciones: FloatArray,
+    val objetivos: List<Objetivo>,
+)
 
 /** La rejilla se dibuja un pelo por encima de la superficie para no competir
  *  con ella en el búfer de profundidad (lo que se ve como temblor de píxeles). */
@@ -178,6 +223,21 @@ class GloboView(contexto: Context) : GLSurfaceView(contexto) {
                 centrarYAcercar(evento.x, evento.y)
                 return true
             }
+
+            /**
+             * Un toque suelto sobre un punto abre su ficha.
+             *
+             * Se usa `onSingleTapConfirmed` y no `onSingleTapUp` a propósito:
+             * el segundo salta antes de saber si el usuario va a repetir el
+             * toque, así que un doble toque abriría una ficha y además
+             * centraría el globo.
+             */
+            override fun onSingleTapConfirmed(evento: MotionEvent): Boolean {
+                val objetivo = objetivoEnPantalla(evento.x, evento.y) ?: return true
+                objetivo.punto?.let { alTocarPunto?.invoke(it) }
+                objetivo.satelite?.let { alTocarSatelite?.invoke(it) }
+                return true
+            }
         },
     )
 
@@ -189,20 +249,83 @@ class GloboView(contexto: Context) : GLSurfaceView(contexto) {
         renderMode = RENDERMODE_WHEN_DIRTY
     }
 
-    /** Envía los satélites y sus trazas al hilo de dibujado. */
-    fun actualizar(satelites: List<SateliteEnVuelo>) {
-        val puntos = FloatArray(satelites.size * 3)
+    /** Grupos de puntos dibujados ahora mismo. Se guardan para el toque. */
+    private val gruposDibujados = mutableListOf<GrupoPuntos>()
+
+    /** Se llama al tocar un objeto de cualquier capa. */
+    var alTocarPunto: ((PuntoMapa) -> Unit)? = null
+
+    /** Se llama al tocar un satélite, que lleva su propia ficha. */
+    var alTocarSatelite: ((SateliteEnVuelo) -> Unit)? = null
+
+    /**
+     * Se llama cuando el globo deja de moverse, con las coordenadas que han
+     * quedado de frente. Sirve para pedir los vuelos de lo que se está
+     * mirando: sin esto se pedirían los del último sitio donde estuviera el
+     * mapa de calle, que puede estar al otro lado del mundo.
+     */
+    var alCambiarCentro: ((Pair<Double, Double>) -> Unit)? = null
+
+    /**
+     * Además de los satélites, dibuja todas las capas activas: cámaras,
+     * sismos, vuelos y barcos. Un grupo por capa para que cada una conserve
+     * su color, y los marcados como destacados van en rojo y más grandes.
+     */
+    fun actualizar(puntos: List<PuntoMapa>, satelites: List<SateliteEnVuelo>) {
         val vector = FloatArray(3)
-        satelites.forEachIndexed { i, s ->
-            aVector(s.lat, s.lon, s.altitudKm, vector)
-            puntos[i * 3] = vector[0]
-            puntos[i * 3 + 1] = vector[1]
-            puntos[i * 3 + 2] = vector[2]
+        val grupos = mutableListOf<GrupoPuntos>()
+
+        for (capa in IdCapa.values()) {
+            for (destacado in listOf(false, true)) {
+                val seleccion = puntos.filter { it.capa == capa && it.destacado == destacado }
+                if (seleccion.isEmpty()) continue
+
+                val posiciones = FloatArray(seleccion.size * 3)
+                val objetivos = ArrayList<Objetivo>(seleccion.size)
+                seleccion.forEachIndexed { i, punto ->
+                    aVector(punto.lat, punto.lon, ALTITUD_MARCADOR_KM, vector)
+                    posiciones[i * 3] = vector[0]
+                    posiciones[i * 3 + 1] = vector[1]
+                    posiciones[i * 3 + 2] = vector[2]
+                    objetivos.add(Objetivo(punto = punto))
+                }
+
+                grupos.add(
+                    GrupoPuntos(
+                        color = if (destacado) COLOR_DESTACADO else capa.colorEnGlobo,
+                        tamano = if (destacado) TAMANO_PUNTO_DESTACADO else TAMANO_PUNTO,
+                        posiciones = posiciones,
+                        objetivos = objetivos,
+                    )
+                )
+            }
+        }
+
+        if (satelites.isNotEmpty()) {
+            val posiciones = FloatArray(satelites.size * 3)
+            val objetivos = ArrayList<Objetivo>(satelites.size)
+            satelites.forEachIndexed { i, enVuelo ->
+                // Los satélites van a su altitud de verdad: es la razón de ser
+                // del globo, porque en un mapa plano eso no se puede ver.
+                aVector(enVuelo.lat, enVuelo.lon, enVuelo.altitudKm, vector)
+                posiciones[i * 3] = vector[0]
+                posiciones[i * 3 + 1] = vector[1]
+                posiciones[i * 3 + 2] = vector[2]
+                objetivos.add(Objetivo(satelite = enVuelo))
+            }
+            grupos.add(
+                GrupoPuntos(
+                    color = IdCapa.SATELITES.colorEnGlobo,
+                    tamano = TAMANO_PUNTO_DESTACADO,
+                    posiciones = posiciones,
+                    objetivos = objetivos,
+                )
+            )
         }
 
         val trazas = mutableListOf<FloatArray>()
-        for (s in satelites) {
-            for (segmento in s.traza) {
+        for (enVuelo in satelites) {
+            for (segmento in enVuelo.traza) {
                 if (segmento.size < 2) continue
                 val linea = FloatArray(segmento.size * 3)
                 segmento.forEachIndexed { i, punto ->
@@ -210,7 +333,7 @@ class GloboView(contexto: Context) : GLSurfaceView(contexto) {
                     // pone la del satélite ahora mismo: en las órbitas bajas,
                     // que son las que llevan traza, la altura varía pocos
                     // kilómetros en 100 minutos y en el globo no se nota.
-                    aVector(punto.first, punto.second, s.altitudKm, vector)
+                    aVector(punto.first, punto.second, enVuelo.altitudKm, vector)
                     linea[i * 3] = vector[0]
                     linea[i * 3 + 1] = vector[1]
                     linea[i * 3 + 2] = vector[2]
@@ -219,8 +342,12 @@ class GloboView(contexto: Context) : GLSurfaceView(contexto) {
             }
         }
 
+        gruposDibujados.clear()
+        gruposDibujados.addAll(grupos)
+
         queueEvent {
-            renderizador.fijarSatelites(puntos, trazas)
+            renderizador.fijarPuntos(grupos)
+            renderizador.fijarTrazas(trazas)
             requestRender()
         }
     }
@@ -337,6 +464,7 @@ class GloboView(contexto: Context) : GLSurfaceView(contexto) {
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                 dosDedos = false
                 performClick()
+                if (arrastrando) alCambiarCentro?.invoke(centroVisible())
             }
         }
         return true
@@ -364,6 +492,160 @@ class GloboView(contexto: Context) : GLSurfaceView(contexto) {
         if (limiteAvisado) return
         limiteAvisado = true
         alPedirMasDetalle?.invoke()
+    }
+
+    // ─────────────────────── Ir a un sitio ───────────────────────
+
+    /**
+     * Gira el globo hasta poner de frente unas coordenadas y, si se pide,
+     * acerca. Se usa para «mi ubicación».
+     *
+     * Los dos ángulos no son la latitud y la longitud, aunque lo parezca: como
+     * las rotaciones van encadenadas —primero sobre el eje horizontal de la
+     * pantalla y luego sobre el vertical—, la inclinación que hace falta
+     * depende también de la longitud. Esta es la solución exacta, y la que se
+     * comprobó contra una réplica de las matrices de OpenGL.
+     *
+     * Hay dos orientaciones que dejan el mismo punto de frente, separadas 180°
+     * en la inclinación. Se elige la que no pasa de 90°, porque el arrastre
+     * solo llega hasta ±89°: si no, el globo aparecería boca abajo y el primer
+     * arrastre lo devolvería de un salto.
+     */
+    fun irA(lat: Double, lon: Double, distanciaNueva: Float? = null) {
+        val phi = Math.toRadians(lat)
+        val lambda = Math.toRadians(lon)
+        val senoLat = kotlin.math.sin(phi)
+        val cosLat = kotlin.math.cos(phi)
+        val cosLon = kotlin.math.cos(lambda)
+        val senoLon = kotlin.math.sin(lambda)
+
+        var inclinacionObjetivo = Math.toDegrees(
+            kotlin.math.atan2(senoLat, cosLat * cosLon)
+        ).toFloat()
+        if (inclinacionObjetivo > 90f) {
+            inclinacionObjetivo -= 180f
+        } else if (inclinacionObjetivo < -90f) {
+            inclinacionObjetivo += 180f
+        }
+
+        // Con la inclinación ya decidida, el giro queda determinado: es el que
+        // deja el punto en el plano vertical que pasa por la cámara.
+        val radianes = Math.toRadians(inclinacionObjetivo.toDouble())
+        val componente = kotlin.math.sin(radianes) * senoLat +
+            kotlin.math.cos(radianes) * cosLat * cosLon
+        val giroObjetivo = Math.toDegrees(
+            kotlin.math.atan2(-cosLat * senoLon, componente)
+        ).toFloat()
+
+        animar(
+            giro + caminoCorto(giro, giroObjetivo),
+            inclinacionObjetivo.coerceIn(-89f, 89f),
+            distanciaNueva ?: minOf(distancia, 2.4f),
+        )
+    }
+
+    /** Vuelve a la vista de partida: el planeta entero, sin girar de más. */
+    fun reiniciar() {
+        animar(20f, 18f, DISTANCIA_INICIAL)
+    }
+
+    /**
+     * Qué punto del planeta queda de frente ahora mismo.
+     *
+     * La cámara mira al centro de la esfera desde (0, 0, distancia), así que lo
+     * que se ve en el centro de la pantalla es el (0, 0, 1) del mundo pasado al
+     * espacio del globo: la rotación inversa de la cámara.
+     */
+    fun centroVisible(): Pair<Double, Double> {
+        val inversa = FloatArray(16)
+        Matrix.setIdentityM(inversa, 0)
+        Matrix.rotateM(inversa, 0, -inclinacion, 1f, 0f, 0f)
+        Matrix.rotateM(inversa, 0, -giro, 0f, 1f, 0f)
+
+        // El (0, 0, 1) del mundo por la traspuesta son estos tres elementos.
+        // Las matrices van por columnas: la columna 2 de la traspuesta es
+        // (inversa[8], inversa[9], inversa[10]).
+        val x = inversa[8]
+        val y = inversa[9]
+        val z = inversa[10]
+
+        val latitud = Math.toDegrees(kotlin.math.asin(y.coerceIn(-1f, 1f).toDouble()))
+        val longitud = Math.toDegrees(kotlin.math.atan2(x.toDouble(), z.toDouble()))
+        return latitud to longitud
+    }
+
+    // ─────────────────────── Qué ha tocado el dedo ───────────────────────
+
+    /**
+     * El punto más cercano al dedo, si hay alguno a menos de treinta píxeles.
+     *
+     * Se proyecta cada objeto a la pantalla con la misma matriz que usa el
+     * dibujado y se compara la distancia. Si hay varios candidatos, gana el más
+     * cercano: al tocar una zona con muchos aviones, conviene que responda el
+     * que está justo debajo del dedo y no el primero de la lista.
+     */
+    private fun objetivoEnPantalla(x: Float, y: Float): Objetivo? {
+        if (gruposDibujados.isEmpty()) return null
+
+        val ancho = width.coerceAtLeast(1)
+        val alto = height.coerceAtLeast(1)
+        val matriz = FloatArray(16)
+        renderizador.copiarMatrizProyeccion(matriz)
+
+        // La rotación se construye una vez, no una por objeto: con tres mil
+        // puntos en pantalla, montar la matriz en cada vuelta se nota.
+        val rotacion = FloatArray(16)
+        construirRotacion(giro, inclinacion, rotacion)
+
+        var mejor: Objetivo? = null
+        var mejorDistancia = RADIO_TACTO_PX
+
+        for (grupo in gruposDibujados) {
+            val posiciones = grupo.posiciones
+            for (i in grupo.objetivos.indices) {
+                val px = posiciones[i * 3]
+                val py = posiciones[i * 3 + 1]
+                val pz = posiciones[i * 3 + 2]
+
+                // Un punto de la cara oculta también cae dentro del círculo del
+                // planeta al proyectarlo, así que sin esta comprobación se
+                // podría seleccionar una cámara que está al otro lado del
+                // mundo. Se lanza el rayo que va de la cámara al punto y se
+                // mira si ha atravesado la esfera antes de llegar: si lo ha
+                // hecho, el planeta lo tapa.
+                val mx = rotacion[0] * px + rotacion[4] * py + rotacion[8] * pz
+                val my = rotacion[1] * px + rotacion[5] * py + rotacion[9] * pz
+                val mz = rotacion[2] * px + rotacion[6] * py + rotacion[10] * pz
+                val rayoX = mx
+                val rayoY = my
+                val rayoZ = mz - distancia
+                val largo = kotlin.math.sqrt(rayoX * rayoX + rayoY * rayoY + rayoZ * rayoZ)
+                if (largo > 0.0001f) {
+                    // (cámara · dirección) del rayo, con la cámara en (0,0,distancia)
+                    val producto = distancia * rayoZ / largo
+                    val discriminante = producto * producto - (distancia * distancia - 1f)
+                    if (discriminante > 0f) {
+                        val primerCorte = -producto - kotlin.math.sqrt(discriminante)
+                        if (primerCorte < largo - MARGEN_BORDE) continue
+                    }
+                }
+
+                val clipX = matriz[0] * px + matriz[4] * py + matriz[8] * pz + matriz[12]
+                val clipY = matriz[1] * px + matriz[5] * py + matriz[9] * pz + matriz[13]
+                val clipW = matriz[3] * px + matriz[7] * py + matriz[11] * pz + matriz[15]
+                if (clipW <= 0f) continue
+
+                val pantallaX = (clipX / clipW + 1f) * ancho / 2f
+                val pantallaY = (1f - clipY / clipW) * alto / 2f
+
+                val separacion = kotlin.math.hypot(pantallaX - x, pantallaY - y)
+                if (separacion < mejorDistancia) {
+                    mejorDistancia = separacion
+                    mejor = grupo.objetivos[i]
+                }
+            }
+        }
+        return mejor
     }
 
     // ─────────────────────── Centrado por doble toque ───────────────────────
@@ -512,7 +794,11 @@ class GloboView(contexto: Context) : GLSurfaceView(contexto) {
             distancia = distanciaInicial + (distanciaNueva - distanciaInicial) * suave
             actualizarCamara()
             requestRender()
-            if (paso < pasos) postOnAnimation { siguiente() }
+            if (paso < pasos) {
+                postOnAnimation { siguiente() }
+            } else {
+                alCambiarCentro?.invoke(centroVisible())
+            }
         }
         siguiente()
     }
@@ -614,10 +900,12 @@ class GloboView(contexto: Context) : GLSurfaceView(contexto) {
         private var mapaTierra: Bitmap? = null
         private var texturaLista = false
 
-        private var satelites: FloatBuffer? = null
-        private var numeroSatelites = 0
+        private var gruposPuntos: List<GrupoRender> = emptyList()
         private var trazas: List<FloatBuffer> = emptyList()
         private var tamanosTrazas = IntArray(0)
+
+        /** Copia de la última matriz de proyección, para acertar al tocar. */
+        @Volatile private var instantanea = FloatArray(16)
 
         private val sol = floatArrayOf(1f, 0f, 0f)
         private val solMundo = FloatArray(4)
@@ -634,6 +922,14 @@ class GloboView(contexto: Context) : GLSurfaceView(contexto) {
         private val mvp = FloatArray(16)
         private val inversa = FloatArray(16)
 
+        /** Grupo de puntos listo para dibujar. */
+        private class GrupoRender(
+            val posiciones: FloatBuffer,
+            val cantidad: Int,
+            val color: FloatArray,
+            val tamano: Float,
+        )
+
         fun fijarCamara(giroNuevo: Float, inclinacionNueva: Float, distanciaNueva: Float) {
             giro = giroNuevo
             inclinacion = inclinacionNueva
@@ -648,11 +944,32 @@ class GloboView(contexto: Context) : GLSurfaceView(contexto) {
             texturaPendiente = mapaBits
         }
 
-        fun fijarSatelites(puntos: FloatArray, lineas: List<FloatArray>) {
-            satelites = aBuffer(puntos)
-            numeroSatelites = puntos.size / 3
+        fun fijarPuntos(grupos: List<GrupoPuntos>) {
+            gruposPuntos = grupos.map {
+                GrupoRender(
+                    posiciones = aBuffer(it.posiciones),
+                    cantidad = it.posiciones.size / 3,
+                    color = it.color,
+                    tamano = it.tamano,
+                )
+            }
+        }
+
+        fun fijarTrazas(lineas: List<FloatArray>) {
             trazas = lineas.map { aBuffer(it) }
             tamanosTrazas = IntArray(lineas.size) { lineas[it].size / 3 }
+        }
+
+        /**
+         * Copia la matriz de proyección para que la vista pueda saber qué ha
+         * tocado el dedo.
+         *
+         * El arreglo lo escribe solo el hilo de dibujado y quien lo lee se
+         * lleva su propia copia. En el peor caso, un toque acierta con la
+         * posición de hace un fotograma: a 60 por segundo, un píxel.
+         */
+        fun copiarMatrizProyeccion(destino: FloatArray) {
+            System.arraycopy(instantanea, 0, destino, 0, 16)
         }
 
         // ── Ciclo de OpenGL ──
@@ -710,7 +1027,7 @@ class GloboView(contexto: Context) : GLSurfaceView(contexto) {
             calcularMatrices()
             dibujarEsfera()
             dibujarRejilla()
-            dibujarSatelites()
+            dibujarPuntos()
         }
 
         private fun calcularMatrices() {
@@ -741,6 +1058,10 @@ class GloboView(contexto: Context) : GLSurfaceView(contexto) {
 
             Matrix.multiplyMM(vistaModelo, 0, vista, 0, modelo, 0)
             Matrix.multiplyMM(mvp, 0, proyeccion, 0, vistaModelo, 0)
+
+            // Queda publicada para que la vista pueda saber qué ha tocado el
+            // dedo sin repetir estas cuentas.
+            System.arraycopy(mvp, 0, instantanea, 0, 16)
         }
 
         // ── Geometría ──
@@ -863,25 +1184,36 @@ class GloboView(contexto: Context) : GLSurfaceView(contexto) {
             dibujarSegmentos(rejilla, tamanosRejilla, 0.34f, 0.44f, 0.56f, 0.30f, 1f)
         }
 
-        private fun dibujarSatelites() {
-            val bufferSatelites = satelites ?: return
-            if (numeroSatelites == 0) return
+        /**
+         * Los puntos de todas las capas: qué hay dónde, sobre el planeta.
+         *
+         * Primero las trazas orbitales, translúcidas para que se lean las
+         * inclinaciones sin tapar el mundo, y después los objetos, cada capa
+         * con su color.
+         */
+        private fun dibujarPuntos() {
+            if (gruposPuntos.isEmpty() && trazas.isEmpty()) return
 
             GLES20.glUseProgram(programaPuntos)
             GLES20.glUniformMatrix4fv(uMvpPuntos, 1, false, mvp, 0)
             GLES20.glEnableVertexAttribArray(aPosPuntos)
 
-            // Trazas orbitales: violeta translúcido, para que se lean las
-            // inclinaciones sin tapar el planeta.
-            dibujarSegmentos(trazas, tamanosTrazas, 0.66f, 0.56f, 0.98f, 0.55f, 1f)
+            dibujarSegmentos(
+                trazas, tamanosTrazas,
+                COLOR_TRAZA[0], COLOR_TRAZA[1], COLOR_TRAZA[2], 0.5f, 1f,
+            )
 
-            // Los satélites, como puntos. Diez píxeles de ancho: a esa escala se
-            // ven sin convertir la pantalla en un prado de cuadros.
-            bufferSatelites.position(0)
-            GLES20.glVertexAttribPointer(aPosPuntos, 3, GLES20.GL_FLOAT, false, 12, bufferSatelites)
-            GLES20.glUniform4f(uColorPuntos, 0.98f, 0.75f, 0.25f, 1f)
-            GLES20.glUniform1f(uTamanoPuntos, 10f)
-            GLES20.glDrawArrays(GLES20.GL_POINTS, 0, numeroSatelites)
+            for (grupo in gruposPuntos) {
+                grupo.posiciones.position(0)
+                GLES20.glVertexAttribPointer(
+                    aPosPuntos, 3, GLES20.GL_FLOAT, false, 12, grupo.posiciones
+                )
+                GLES20.glUniform4f(
+                    uColorPuntos, grupo.color[0], grupo.color[1], grupo.color[2], 1f
+                )
+                GLES20.glUniform1f(uTamanoPuntos, grupo.tamano)
+                GLES20.glDrawArrays(GLES20.GL_POINTS, 0, grupo.cantidad)
+            }
 
             GLES20.glDisableVertexAttribArray(aPosPuntos)
         }
@@ -1073,14 +1405,28 @@ class GloboView(contexto: Context) : GLSurfaceView(contexto) {
  */
 @Composable
 fun GloboOjoDeDios(
+    puntos: List<PuntoMapa>,
     satelites: List<SateliteEnVuelo>,
+    colorVerdadero: Boolean,
+    centrarEn: Pair<Double, Double>?,
+    pausado: Boolean,
     modifier: Modifier = Modifier,
+    ordenReinicio: Int = 0,
+    ordenUbicacion: Int = 0,
     alPedirMasDetalle: () -> Unit = {},
+    alTocarPunto: (PuntoMapa) -> Unit = {},
+    alTocarSatelite: (SateliteEnVuelo) -> Unit = {},
+    alCambiarCentro: (Pair<Double, Double>) -> Unit = {},
 ) {
     val contexto = LocalContext.current
     val repositorio = remember(contexto) { Repositorio(contexto) }
     val globo = remember { GloboView(contexto) }
     val avisoActual = rememberUpdatedState(alPedirMasDetalle)
+    val toquePunto = rememberUpdatedState(alTocarPunto)
+    val toqueSatelite = rememberUpdatedState(alTocarSatelite)
+    val centroActual = rememberUpdatedState(alCambiarCentro)
+
+    var enPrimerPlano by remember { mutableStateOf(true) }
 
     AndroidView(modifier = modifier, factory = { globo })
 
@@ -1091,29 +1437,61 @@ fun GloboOjoDeDios(
     DisposableEffect(propietario, globo) {
         val observador = LifecycleEventObserver { _, evento ->
             when (evento) {
-                Lifecycle.Event.ON_RESUME -> globo.onResume()
-                Lifecycle.Event.ON_PAUSE -> globo.onPause()
+                Lifecycle.Event.ON_RESUME -> enPrimerPlano = true
+                Lifecycle.Event.ON_PAUSE -> enPrimerPlano = false
                 else -> Unit
             }
         }
         propietario.lifecycle.addObserver(observador)
         globo.alPedirMasDetalle = { avisoActual.value() }
+        globo.alTocarPunto = { toquePunto.value(it) }
+        globo.alTocarSatelite = { toqueSatelite.value(it) }
+        globo.alCambiarCentro = { centroActual.value(it) }
         globo.prepararEscena()
 
         onDispose {
             propietario.lifecycle.removeObserver(observador)
             globo.alPedirMasDetalle = null
+            globo.alTocarPunto = null
+            globo.alTocarSatelite = null
+            globo.alCambiarCentro = null
             globo.onPause()
         }
     }
 
-    // La geografía del planeta, una sola vez.
-    LaunchedEffect(globo) {
-        val mapaBits = withContext(Dispatchers.IO) { repositorio.texturaTierra() }
+    // Se dibuja solo si la pantalla está delante y nada lo tapa. Mientras la
+    // vista de calle está abierta encima, el globo se para: no hay razón para
+    // gastar batería pintando lo que nadie ve.
+    LaunchedEffect(enPrimerPlano, pausado, globo) {
+        if (enPrimerPlano && !pausado) globo.onResume() else globo.onPause()
+    }
+
+    // La geografía del planeta. Cambia entre el relieve y el color verdadero
+    // del día según la capa de la NASA, y se cachea, así que solo se descarga
+    // una vez por variante.
+    LaunchedEffect(globo, colorVerdadero) {
+        val mapaBits = withContext(Dispatchers.IO) {
+            repositorio.texturaTierra(colorVerdadero)
+        }
         if (mapaBits != null) globo.fijarTextura(mapaBits)
     }
 
-    LaunchedEffect(satelites) { globo.actualizar(satelites) }
+    LaunchedEffect(globo, puntos, satelites) { globo.actualizar(puntos, satelites) }
+
+    // Al llegar una posición nueva (el botón «Mi ubicación»), el globo gira
+    // hasta ponerla de frente. El contador está ahí para que pulsar el botón
+    // vuelva a girar aunque las coordenadas sean las mismas: sin él, el efecto
+    // no se reiniciaría y el botón parecería muerto tras mover el globo a mano.
+    LaunchedEffect(globo, centrarEn, ordenUbicacion) {
+        val destino = centrarEn ?: return@LaunchedEffect
+        globo.irA(destino.first, destino.second)
+    }
+
+    // El botón «Reiniciar» no manda una posición sino una señal: este número
+    // cambia de valor y el globo vuelve a su vista de partida.
+    LaunchedEffect(globo, ordenReinicio) {
+        if (ordenReinicio > 0) globo.reiniciar()
+    }
 
     // El terminador se mueve unos 15° por hora: refrescarlo cada minuto sobra.
     LaunchedEffect(globo) {

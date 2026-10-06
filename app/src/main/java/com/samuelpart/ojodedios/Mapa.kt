@@ -299,6 +299,7 @@ fun MapaOjoDeDios(
     alTocarSatelite: (SateliteEnVuelo) -> Unit,
     alMoverMapa: (Pair<Double, Double>) -> Unit,
     modifier: Modifier = Modifier,
+    zoomInicial: Double = 3.0,
 ) {
     val contexto = LocalContext.current
 
@@ -335,5 +336,9 @@ fun MapaOjoDeDios(
     // verdad (cada minuto). Si no, se reconstruirían las polilíneas cada segundo.
     LaunchedEffect(satelites.map { it.traza }) { controlador.pintarTrazas(satelites) }
     LaunchedEffect(miUbicacion) { controlador.pintarMiUbicacion(miUbicacion) }
-    LaunchedEffect(centroInicial) { controlador.moverA(centroInicial.first, centroInicial.second, 3.0) }
+    // El centro y el zoom solo se aplican al abrir. Si dependieran de las
+    // recomposiciones, el mapa daría un salto cada vez que se mueve un satélite.
+    LaunchedEffect(controlador) {
+        controlador.moverA(centroInicial.first, centroInicial.second, zoomInicial)
+    }
 }

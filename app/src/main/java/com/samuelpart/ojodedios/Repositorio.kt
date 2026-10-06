@@ -290,36 +290,26 @@ class Repositorio(private val contexto: Context) {
      * globo tiene geografía aunque no haya red. Si no hay ni red ni caché,
      * devuelve null y el globo se queda con el océano y la rejilla.
      */
-    suspend fun texturaTierra(): Bitmap? {
-        // El nombre lleva el tamaño: si algún día cambia, la caché vieja no se
-        // queda sirviendo la imagen de antes para siempre.
-        val archivo = java.io.File(contexto.cacheDir, "tierra-4k.jpg")
-        val bytes: ByteArray? = withContext(Dispatchers.IO) {
-            val enCache = archivo.exists() &&
-                archivo.length() > 50_000 &&
-                System.currentTimeMillis() - archivo.lastModified() < 30L * 24 * 3600 * 1000
+    suspend fun texturaTierra(colorVerdadero: Boolean = false): Bitmap? {
+        // El nombre lleva la variante y el tamaño: si algún día cambia
+        // cualquiera de las dos, la caché vieja no se queda sirviendo la
+        // imagen de antes para siempre.
+        val archivo = java.io.File(
+            contexto.cacheDir,
+            if (colorVerdadero) "tierra-4k-color.jpg" else "tierra-4k-relieve.jpg",
+        )
 
-            if (enCache) {
-                archivo.readBytes()
-            } else {
-                try {
-                    val descargado = Red.bytes(URL_TEXTURA_TIERRA)
-                    // Si el servicio contesta con un XML de error o una página
-                    // web en vez de una imagen, no se guarda: envenenaría la
-                    // caché y el globo se quedaría sin geografía para siempre.
-                    if (descargado.size < 2 ||
-                        descargado[0] != 0xFF.toByte() ||
-                        descargado[1] != 0xD8.toByte()
-                    ) {
-                        throw ErrorRed("la respuesta de GIBS no es un JPEG")
-                    }
-                    archivo.writeBytes(descargado)
-                    descargado
-                } catch (e: Exception) {
-                    // Sin red: si hay algo en caché, aunque sea viejo, mejor eso.
-                    if (archivo.exists()) archivo.readBytes() else null
-                }
-            }
+        var bytes = descargarTextura(archivo, if (colorVerdadero) URL_TEXTURA_HOY else URL_TEXTURA_TIERRA)
+
+        // Si el color verdadero no llega —el servicio cae, o aún no ha
+        // publicado la imagen del día— se usa el relieve: mejor un planeta con
+        // geografía que uno a medio pintar. Y si el relieve tampoco, el globo
+        // se queda con su océano, que para eso está el respaldo del sombreador.
+        if (bytes == null && colorVerdadero) {
+            bytes = descargarTextura(
+                java.io.File(contexto.cacheDir, "tierra-4k-relieve.jpg"),
+                URL_TEXTURA_TIERRA,
+            )
         }
         if (bytes == null) return null
 
@@ -337,6 +327,36 @@ class Repositorio(private val contexto: Context) {
             }
         }
     }
+
+    /** Baja una textura, o la recupera de la caché si aún sirve. */
+    private suspend fun descargarTextura(archivo: java.io.File, url: String): ByteArray? =
+        withContext(Dispatchers.IO) {
+            val enCache = archivo.exists() &&
+                archivo.length() > 50_000 &&
+                System.currentTimeMillis() - archivo.lastModified() < 30L * 24 * 3600 * 1000
+
+            if (enCache) {
+                archivo.readBytes()
+            } else {
+                try {
+                    val descargado = Red.bytes(url)
+                    // Si el servicio contesta con un XML de error o una página
+                    // web en vez de una imagen, no se guarda: envenenaría la
+                    // caché y el globo se quedaría sin geografía para siempre.
+                    if (descargado.size < 2 ||
+                        descargado[0] != 0xFF.toByte() ||
+                        descargado[1] != 0xD8.toByte()
+                    ) {
+                        throw ErrorRed("la respuesta de GIBS no es un JPEG")
+                    }
+                    archivo.writeBytes(descargado)
+                    descargado
+                } catch (e: Exception) {
+                    // Sin red: si hay algo en caché, aunque sea viejo, mejor eso.
+                    if (archivo.exists()) archivo.readBytes() else null
+                }
+            }
+        }
 
     // ─────────────────────────── Sismos ───────────────────────────
 
@@ -538,6 +558,19 @@ class Repositorio(private val contexto: Context) {
             "https://gibs.earthdata.nasa.gov/wms/epsg4326/best/wms.cgi" +
                 "?SERVICE=WMS&VERSION=1.1.1&REQUEST=GetMap" +
                 "&LAYERS=BlueMarble_ShadedRelief_Bathymetry" +
+                "&SRS=EPSG:4326&BBOX=-180,-90,180,90" +
+                "&WIDTH=4096&HEIGHT=2048&FORMAT=image/jpeg"
+
+        /**
+         * El mundo tal y como está hoy, en color verdadero, para el globo. Es
+         * la misma capa que usa la vista de calle, pero como una sola imagen
+         * equirectangular de todo el planeta. Sin `TIME`, GIBS devuelve la
+         * última imagen publicada, que suele ser de ayer.
+         */
+        private const val URL_TEXTURA_HOY =
+            "https://gibs.earthdata.nasa.gov/wms/epsg4326/best/wms.cgi" +
+                "?SERVICE=WMS&VERSION=1.1.1&REQUEST=GetMap" +
+                "&LAYERS=VIIRS_SNPP_CorrectedReflectance_TrueColor" +
                 "&SRS=EPSG:4326&BBOX=-180,-90,180,90" +
                 "&WIDTH=4096&HEIGHT=2048&FORMAT=image/jpeg"
 
