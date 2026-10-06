@@ -72,6 +72,38 @@ private val contenido = listOf(
         ),
     ),
     Bloque(
+        titulo = "«Pero yo puedo encontrar esas cámaras publicadas»",
+        parrafos = listOf(
+            "Es el argumento más frecuente, así que merece una respuesta directa: " +
+                "que algo sea alcanzable no lo convierte en público.",
+            "Un listado de cámaras con la contraseña por defecto describe un fallo " +
+                "de seguridad, no una invitación. Es la diferencia entre una puerta " +
+                "abierta de par en par —se entra— y una cerradura rota: la " +
+                "cerradura rota no autoriza a nadie, y quien la usa comete la " +
+                "misma infracción que quien la fuerza. El Código Penal español " +
+                "castiga el acceso sin autorización a sistemas ajenos (art. 197 bis) " +
+                "y el descubrimiento de secretos (art. 197), y en la Unión Europea " +
+                "la Directiva 2013/40 tipifica el mismo acceso ilegal. Que el " +
+                "listado esté en un foro, en un buscador o en un repositorio de " +
+                "GitHub no cambia nada: la autorización la da el dueño del sistema, " +
+                "no quien lo encuentra.",
+            "Hay además un problema que no se arregla con matices: esas cámaras no " +
+                "son servicios, son personas. Una cámara IP con la clave de fábrica " +
+                "suele estar en el salón de una casa, en un colegio o en una " +
+                "consulta médica. Enseñarlas no es observar el mundo, es mirar " +
+                "dentro de casas ajenas, y ahí el delito se agrava porque entra la " +
+                "intimidad (art. 197.2). Añadir esa función convertiría esta app en " +
+                "una herramienta de acoso, y con ella dejaría de cumplir lo único " +
+                "que la justifica: usar solo lo que su operador publica.",
+            "Lo que sí se puede hacer sin cruzar esa línea es lo que hace la app: " +
+                "redes oficiales que publican sus cámaras a propósito (Londres, " +
+                "Finlandia, Hong Kong, Singapur), imágenes de satélite abiertas y " +
+                "tráfico de radio que emiten por obligación las aeronaves y los " +
+                "buques. Y si lo que buscas es ver lo que tú mismo tienes, eso es " +
+                "tu propia cámara: ahí no hay nada que autorizar.",
+        ),
+    ),
+    Bloque(
         titulo = "Por qué el «Ojo de Dios» literal no existe",
         parrafos = listOf(
             "Un sistema capaz de ver cualquier punto del planeta en vivo y con detalle " +

@@ -276,17 +276,24 @@ class Repositorio(private val contexto: Context) {
      * El mapamundi que se pega al globo 3D.
      *
      * Es la Blue Marble de la NASA, que es de dominio público: un mapamundi
-     * equirectangular de 2048×1024 con relieve y batimetría del servicio de
+     * equirectangular de 4096×2048 con relieve y batimetría del servicio de
      * imágenes GIBS. Tiene un día de antigüedad, así que la geografía está,
      * pero no las nubes de hoy: para el tiempo de ahora ya está la capa de
      * radar, y esto es el planeta, no el parte meteorológico.
+     *
+     * Son 4096 píxeles y no menos porque a esta escala cada píxel son unos
+     * 10 km: al acercarse, la costa se mantiene en su sitio en vez de
+     * deshacerse en manchas. Si el teléfono no admite una textura tan grande,
+     * el globo la encoge antes de subirla.
      *
      * Se guarda en la caché de la app, así que a partir de la segunda vez el
      * globo tiene geografía aunque no haya red. Si no hay ni red ni caché,
      * devuelve null y el globo se queda con el océano y la rejilla.
      */
     suspend fun texturaTierra(): Bitmap? {
-        val archivo = java.io.File(contexto.cacheDir, "tierra.jpg")
+        // El nombre lleva el tamaño: si algún día cambia, la caché vieja no se
+        // queda sirviendo la imagen de antes para siempre.
+        val archivo = java.io.File(contexto.cacheDir, "tierra-4k.jpg")
         val bytes: ByteArray? = withContext(Dispatchers.IO) {
             val enCache = archivo.exists() &&
                 archivo.length() > 50_000 &&
@@ -532,7 +539,7 @@ class Repositorio(private val contexto: Context) {
                 "?SERVICE=WMS&VERSION=1.1.1&REQUEST=GetMap" +
                 "&LAYERS=BlueMarble_ShadedRelief_Bathymetry" +
                 "&SRS=EPSG:4326&BBOX=-180,-90,180,90" +
-                "&WIDTH=2048&HEIGHT=1024&FORMAT=image/jpeg"
+                "&WIDTH=4096&HEIGHT=2048&FORMAT=image/jpeg"
 
         /** Tope de cámaras de Hong Kong dibujadas, para no ahogar el mapa. */
         private const val TOPE_HONG_KONG = 240

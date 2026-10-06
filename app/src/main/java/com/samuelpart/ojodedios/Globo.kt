@@ -6,11 +6,13 @@ import android.opengl.GLES20
 import android.opengl.GLSurfaceView
 import android.opengl.GLUtils
 import android.opengl.Matrix
+import android.view.GestureDetector
 import android.view.MotionEvent
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
@@ -50,13 +52,40 @@ private const val RADIO_TIERRA_KM = 6371.0
 private const val SEGMENTOS_LAT = 64
 private const val SEGMENTOS_LON = 96
 
+/** Campo de visión de la cámara, en grados. Lo comparten dibujado y toques. */
+private const val CAMPO_VISION = 45f
+
+/**
+ * Sensibilidad del arrastre: recorrer la pantalla de un borde al otro gira
+ * media vuelta. Va en grados por píxel, calculados con el tamaño real de la
+ * vista, así que no depende de la pantalla que tenga cada teléfono.
+ */
+private const val GRADOS_POR_PANTALLA = 180f
+
+/** Tope de cada paso del centrado, en grados, para que no dé un salto loco. */
+private const val TOPE_PASO_CENTRADO = 40f
+
+/** Pasos del centrado. Con cuatro ya converge; ocho es margen de sobra. */
+private const val PASOS_CENTRADO = 8
+
+/** Cuánto se acerca el globo con un doble toque. */
+private const val FACTOR_ACERCAMIENTO = 0.7f
+
 /** La rejilla se dibuja un pelo por encima de la superficie para no competir
  *  con ella en el búfer de profundidad (lo que se ve como temblor de píxeles). */
 private const val ALTITUD_REJILLA_KM = 18.0
 
-/** Distancias de cámara, en radios terrestres. Con 14 se ve el anillo GEO
- *  entero; con 1.35 se está prácticamente sobre la superficie. */
-private const val DISTANCIA_MINIMA = 1.35f
+/**
+ * Distancias de cámara, en radios terrestres. Con 14 se ve el anillo
+ * geoestacionario entero —los 35 786 km de altura— y el planeta entero de un
+ * vistazo.
+ *
+ * El mínimo no es 1,2 porque la textura no lo aguantaría: a 1,7 radios la
+ * cámara está a unos 4 500 km del suelo y el mapamundi de la NASA ya se está
+ * estirando. Dejar acercarse más solo enseña una mancha borrosa, que es peor
+ * que decir «hasta aquí llega».
+ */
+private const val DISTANCIA_MINIMA = 1.7f
 private const val DISTANCIA_MAXIMA = 14f
 private const val DISTANCIA_INICIAL = 3.4f
 
@@ -125,6 +154,32 @@ class GloboView(contexto: Context) : GLSurfaceView(contexto) {
     private var yPrevio = 0f
     private var distanciaPrevia = 0f
     private var dosDedos = false
+
+    /** Cada animación lleva su número; un toque nuevo invalida la anterior. */
+    private var generacion = 0
+
+    /** Recorrido del dedo desde que tocó, para saber si está arrastrando. */
+    private var recorrido = 0f
+    private var arrastrando = false
+
+    /** Para no repetir el aviso cada vez que se llega al tope de acercamiento. */
+    private var limiteAvisado = false
+
+    /**
+     * La interfaz se suscribe a esto para explicar por qué el globo no se
+     * acerca más. Sin el aviso, el tope parece un fallo de la app.
+     */
+    var alPedirMasDetalle: (() -> Unit)? = null
+
+    private val detector = GestureDetector(
+        contexto,
+        object : GestureDetector.SimpleOnGestureListener() {
+            override fun onDoubleTap(evento: MotionEvent): Boolean {
+                centrarYAcercar(evento.x, evento.y)
+                return true
+            }
+        },
+    )
 
     init {
         setEGLContextClientVersion(2)
@@ -197,22 +252,52 @@ class GloboView(contexto: Context) : GLSurfaceView(contexto) {
     // ─────────────────────────── Tacto ───────────────────────────
 
     /**
-     * Girar y acercar. El signo de cada eje está puesto para que la superficie
-     * siga al dedo: si arrastras a la derecha, el trozo de planeta que tenías
-     * debajo se va a la derecha, como si lo agarraras.
+     * Girar, acercar y centrar.
+     *
+     * Tres decisiones que se notan al usarlo:
+     *
+     * - **La sensibilidad sale del tamaño de la vista**: arrastrar de un borde
+     *   al otro gira media vuelta. Antes era un valor fijo por píxel, y en una
+     *   pantalla grande eso hacía que el globo se fuera de las manos.
+     * - **Al levantar un dedo no hay salto**: el arrastre continúa desde donde
+     *   está el dedo que queda, no desde la referencia vieja.
+     * - **Doble toque**: pone de frente lo que se ha tocado y acerca. Es la
+     *   forma de llegar a un sitio concreto sin pelearse con el pellizco.
+     *
+     * El signo de cada eje sigue a la superficie, como si se agarrara el globo
+     * con la mano.
      */
     override fun onTouchEvent(evento: MotionEvent): Boolean {
+        // El detector solo mira si hubo doble toque; no consume el evento.
+        detector.onTouchEvent(evento)
+
         when (evento.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
+                cancelarAnimacion()
                 xPrevio = evento.x
                 yPrevio = evento.y
                 dosDedos = false
+                recorrido = 0f
+                arrastrando = false
             }
 
             MotionEvent.ACTION_POINTER_DOWN -> {
                 if (evento.pointerCount >= 2) {
                     dosDedos = true
                     distanciaPrevia = separacion(evento)
+                    cancelarAnimacion()
+                }
+            }
+
+            MotionEvent.ACTION_POINTER_UP -> {
+                // Queda un dedo: el arrastre sigue desde donde está ese dedo.
+                // Sin esto el globo pegaba un salto, porque la referencia
+                // seguía siendo el dedo que se acababa de levantar.
+                if (evento.pointerCount == 2) {
+                    val indice = if (evento.actionIndex == 0) 1 else 0
+                    xPrevio = evento.getX(indice)
+                    yPrevio = evento.getY(indice)
+                    dosDedos = false
                 }
             }
 
@@ -222,11 +307,25 @@ class GloboView(contexto: Context) : GLSurfaceView(contexto) {
                     if (distanciaPrevia > 0f && actual > 0f) {
                         distancia *= distanciaPrevia / actual
                         distancia = distancia.coerceIn(DISTANCIA_MINIMA, DISTANCIA_MAXIMA)
+                        if (distancia <= DISTANCIA_MINIMA) avisarDelLimite()
+                        if (distancia > DISTANCIA_MINIMA * 1.02f) limiteAvisado = false
                     }
                     distanciaPrevia = actual
-                } else {
-                    giro += (evento.x - xPrevio) * 0.35f
-                    inclinacion = (inclinacion + (evento.y - yPrevio) * 0.35f)
+                } else if (evento.pointerCount == 1) {
+                    // Un temblor de dos píxeles no es un arrastre: si se tomara
+                    // por tal, cualquier doble toque se cancelaría a sí mismo
+                    // antes de empezar a animar.
+                    recorrido += kotlin.math.abs(evento.x - xPrevio) +
+                        kotlin.math.abs(evento.y - yPrevio)
+                    if (!arrastrando && recorrido > 12f) {
+                        arrastrando = true
+                        cancelarAnimacion()
+                    }
+
+                    giro += (evento.x - xPrevio) *
+                        (GRADOS_POR_PANTALLA / width.coerceAtLeast(1))
+                    inclinacion = (inclinacion + (evento.y - yPrevio) *
+                        (GRADOS_POR_PANTALLA / height.coerceAtLeast(1)))
                         .coerceIn(-89f, 89f)
                     xPrevio = evento.x
                     yPrevio = evento.y
@@ -259,6 +358,223 @@ class GloboView(contexto: Context) : GLSurfaceView(contexto) {
             renderizador.fijarCamara(giro, inclinacion, distancia)
             requestRender()
         }
+    }
+
+    private fun avisarDelLimite() {
+        if (limiteAvisado) return
+        limiteAvisado = true
+        alPedirMasDetalle?.invoke()
+    }
+
+    // ─────────────────────── Centrado por doble toque ───────────────────────
+
+    /**
+     * Doble toque: gira el globo hasta poner de frente el punto tocado y se
+     * acerca un paso.
+     *
+     * Aquí está el arreglo del problema de «quiero acercarme a algo y se me
+     * va a otro lado». La cámara mira siempre al centro del planeta, así que
+     * acercarse sin más empuja hacia el borde todo lo que no esté justo en el
+     * centro. Lo que hay que hacer es girar primero y acercarse después.
+     *
+     * El giro se resuelve con un método de Newton sobre los dos ángulos del
+     * globo: se busca la orientación que deja ese punto de frente y cada paso
+     * mira dónde ha quedado para corregir. Con cuatro pasos converge; se dan
+     * ocho porque no cuestan nada.
+     */
+    private fun centrarYAcercar(x: Float, y: Float) {
+        val distanciaNueva = (distancia * FACTOR_ACERCAMIENTO).coerceAtLeast(DISTANCIA_MINIMA)
+
+        val objetivo = puntoEnLaEsfera(x, y)
+        if (objetivo == null) {
+            // Toque al vacío: solo se acerca.
+            animar(giro, inclinacion, distanciaNueva)
+            return
+        }
+
+        var giroNuevo = giro
+        var inclinacionNueva = inclinacion
+        val vector = FloatArray(3)
+
+        repeat(PASOS_CENTRADO) {
+            // Dónde ha quedado ese punto del planeta, en coordenadas del mundo.
+            aplicarRotacion(giroNuevo, inclinacionNueva, objetivo, vector)
+            // Si el punto está pegado al borde, la corrección no es estable: su
+            // proyección se dispara. Se deja donde está, que ya se ve.
+            if (vector[2] < 0.1f) return@repeat
+
+            val seno = kotlin.math.sin(Math.toRadians(giroNuevo.toDouble())).toFloat()
+            val coseno = kotlin.math.cos(Math.toRadians(giroNuevo.toDouble())).toFloat()
+            val denominador = seno * vector[0] + coseno * vector[2]
+            if (kotlin.math.abs(denominador) < 1e-6f) return@repeat
+
+            val pasoInclinacion = Math.toDegrees(
+                (vector[1] / denominador).toDouble()
+            ).toFloat().coerceIn(-TOPE_PASO_CENTRADO, TOPE_PASO_CENTRADO)
+
+            val numerador = -vector[0] - seno * vector[1] *
+                Math.toRadians(pasoInclinacion.toDouble()).toFloat()
+            val pasoGiro = Math.toDegrees(
+                (numerador / vector[2]).toDouble()
+            ).toFloat().coerceIn(-TOPE_PASO_CENTRADO, TOPE_PASO_CENTRADO)
+
+            giroNuevo += pasoGiro
+            inclinacionNueva += pasoInclinacion
+        }
+
+        animar(
+            giro + caminoCorto(giro, giroNuevo),
+            // El arrastre admite este margen y nada más. Si la solución se sale
+            // de ahí se recorta: pasa en uno de cada cincuenta toques, y aun
+            // así el punto queda dentro de la pantalla.
+            inclinacionNueva.coerceIn(-89f, 89f),
+            distanciaNueva,
+        )
+    }
+
+    /**
+     * Dónde ha caído el dedo sobre el planeta, en coordenadas del globo.
+     *
+     * Devuelve null si el toque cayó al vacío, es decir, fuera del planeta.
+     */
+    private fun puntoEnLaEsfera(x: Float, y: Float): FloatArray? {
+        val ancho = width.coerceAtLeast(1)
+        val alto = height.coerceAtLeast(1)
+
+        // De píxeles a coordenadas normalizadas, y de ahí a un rayo.
+        val nx = 2f * x / ancho - 1f
+        val ny = 1f - 2f * y / alto
+        val medio = kotlin.math.tan(Math.toRadians(CAMPO_VISION / 2.0)).toFloat()
+        val aspecto = ancho.toFloat() / alto
+
+        val rotacion = FloatArray(16)
+        construirRotacion(giro, inclinacion, rotacion)
+
+        // La cámara está en (0, 0, distancia) mirando al origen: en su propio
+        // sistema está en el origen y mira hacia -Z. El rayo se pasa al espacio
+        // del globo con la traspuesta, que en una rotación es la inversa. La
+        // vista solo traslada, así que las direcciones no cambian al pasar.
+        val direccion = floatArrayOf(nx * medio * aspecto, ny * medio, -1f)
+        normalizar(direccion)
+        val direccionModelo = FloatArray(3)
+        aplicarTraspuesta(rotacion, direccion, direccionModelo)
+
+        val origen = floatArrayOf(0f, 0f, distancia)
+        val origenModelo = FloatArray(3)
+        aplicarTraspuesta(rotacion, origen, origenModelo)
+
+        // Corte del rayo con la esfera de radio 1: |origen + t·dirección| = 1.
+        val b = 2f * (origenModelo[0] * direccionModelo[0] +
+            origenModelo[1] * direccionModelo[1] +
+            origenModelo[2] * direccionModelo[2])
+        val c = origenModelo[0] * origenModelo[0] +
+            origenModelo[1] * origenModelo[1] +
+            origenModelo[2] * origenModelo[2] - 1f
+        val discriminante = b * b - 4f * c
+        if (discriminante < 0f) return null
+
+        val raiz = kotlin.math.sqrt(discriminante)
+        // El primer corte es la cara que se ve; si queda detrás, el otro.
+        var t = (-b - raiz) / 2f
+        if (t < 0f) t = (-b + raiz) / 2f
+        if (t < 0f) return null
+
+        return floatArrayOf(
+            origenModelo[0] + t * direccionModelo[0],
+            origenModelo[1] + t * direccionModelo[1],
+            origenModelo[2] + t * direccionModelo[2],
+        )
+    }
+
+    // ─────────────────────── Animación ───────────────────────
+
+    /**
+     * Lleva la cámara al destino en una fracción de segundo.
+     *
+     * Sin esto, el doble toque daría un salto seco y no se entendería qué ha
+     * pasado. El suavizado hace que arranque y frene.
+     */
+    private fun animar(giroNuevo: Float, inclinacionNueva: Float, distanciaNueva: Float) {
+        val giroInicial = giro
+        val inclinacionInicial = inclinacion
+        val distanciaInicial = distancia
+        val pasos = 18
+        val miGeneracion = ++generacion
+        var paso = 0
+
+        fun siguiente() {
+            if (miGeneracion != generacion) return
+            paso++
+            val avance = paso.toFloat() / pasos
+            val suave = avance * avance * (3f - 2f * avance)
+            giro = giroInicial + (giroNuevo - giroInicial) * suave
+            inclinacion = inclinacionInicial + (inclinacionNueva - inclinacionInicial) * suave
+            distancia = distanciaInicial + (distanciaNueva - distanciaInicial) * suave
+            actualizarCamara()
+            requestRender()
+            if (paso < pasos) postOnAnimation { siguiente() }
+        }
+        siguiente()
+    }
+
+    private fun cancelarAnimacion() {
+        generacion++
+    }
+
+    // ─────────────────────── Cuentas de rotación ───────────────────────
+
+    /**
+     * La rotación del globo: primero la inclinación sobre X, después el giro
+     * sobre Y. Tiene que ser exactamente la misma composición que la del
+     * renderizador, o los toques dejarían de coincidir con lo que se ve.
+     */
+    private fun construirRotacion(giro: Float, inclinacion: Float, salida: FloatArray) {
+        Matrix.setIdentityM(salida, 0)
+        Matrix.rotateM(salida, 0, giro, 0f, 1f, 0f)
+        Matrix.rotateM(salida, 0, inclinacion, 1f, 0f, 0f)
+    }
+
+    /** Multiplica un punto por la matriz de rotación. */
+    private fun aplicarRotacion(
+        giro: Float,
+        inclinacion: Float,
+        punto: FloatArray,
+        salida: FloatArray,
+    ) {
+        val matriz = FloatArray(16)
+        construirRotacion(giro, inclinacion, matriz)
+        salida[0] = matriz[0] * punto[0] + matriz[4] * punto[1] + matriz[8] * punto[2]
+        salida[1] = matriz[1] * punto[0] + matriz[5] * punto[1] + matriz[9] * punto[2]
+        salida[2] = matriz[2] * punto[0] + matriz[6] * punto[1] + matriz[10] * punto[2]
+    }
+
+    /**
+     * Multiplica un vector por la traspuesta de la matriz. Las matrices de
+     * OpenGL van por columnas, de ahí que los índices no sigan el orden de las
+     * filas: el elemento (fila, columna) está en `columna * 4 + fila`.
+     */
+    private fun aplicarTraspuesta(matriz: FloatArray, vector: FloatArray, salida: FloatArray) {
+        salida[0] = matriz[0] * vector[0] + matriz[1] * vector[1] + matriz[2] * vector[2]
+        salida[1] = matriz[4] * vector[0] + matriz[5] * vector[1] + matriz[6] * vector[2]
+        salida[2] = matriz[8] * vector[0] + matriz[9] * vector[1] + matriz[10] * vector[2]
+    }
+
+    private fun normalizar(vector: FloatArray) {
+        val longitud = kotlin.math.sqrt(
+            vector[0] * vector[0] + vector[1] * vector[1] + vector[2] * vector[2]
+        )
+        if (longitud <= 0f) return
+        vector[0] /= longitud
+        vector[1] /= longitud
+        vector[2] /= longitud
+    }
+
+    /** Diferencia entre dos ángulos por el camino más corto, en grados. */
+    private fun caminoCorto(desde: Float, hasta: Float): Float {
+        var diferencia = (hasta - desde) % 360f
+        if (diferencia > 180f) diferencia -= 360f
+        if (diferencia < -180f) diferencia += 360f
+        return diferencia
     }
 
     // ─────────────────────── Renderizador ───────────────────────
@@ -374,18 +690,19 @@ class GloboView(contexto: Context) : GLSurfaceView(contexto) {
         override fun onSurfaceChanged(gl: GL10?, ancho: Int, alto: Int) {
             GLES20.glViewport(0, 0, ancho, alto)
             val aspecto = ancho.toFloat() / alto.coerceAtLeast(1)
-            // 45° de campo de visión: con la cámara a 3,4 radios, el planeta
-            // ocupa algo más de dos tercios de la pantalla.
-            Matrix.perspectiveM(proyeccion, 0, 45f, aspecto, 0.1f, 100f)
+            // El campo de visión es una constante compartida: los toques
+            // necesitan el mismo valor para desproyectar bien el rayo.
+            Matrix.perspectiveM(proyeccion, 0, CAMPO_VISION, aspecto, 0.1f, 100f)
         }
 
         override fun onDrawFrame(gl: GL10?) {
             GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT or GLES20.GL_DEPTH_BUFFER_BIT)
 
             texturaPendiente?.let { mapaBits ->
+                val ajustada = ajustarAlLimite(mapaBits)
                 mapaTierra?.recycle()
-                mapaTierra = mapaBits
-                subirTextura(mapaBits)
+                mapaTierra = ajustada
+                subirTextura(ajustada)
                 texturaPendiente = null
                 texturaLista = true
             }
@@ -616,10 +933,12 @@ class GloboView(contexto: Context) : GLSurfaceView(contexto) {
             val identificadores = IntArray(1)
             GLES20.glGenTextures(1, identificadores, 0)
             GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, identificadores[0])
-            // Sin mipmaps: el globo se ve casi siempre a la misma escala y
-            // generarlos cuesta memoria y tiempo de carga.
+            // Con mipmaps: al alejarse, el planeta entero cabe en pocos píxeles
+            // y sin ellos el texturizado hierve. El nivel pequeño también quita
+            // trabajo a la tarjeta gráfica.
             GLES20.glTexParameteri(
-                GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MIN_FILTER, GLES20.GL_LINEAR
+                GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MIN_FILTER,
+                GLES20.GL_LINEAR_MIPMAP_LINEAR,
             )
             GLES20.glTexParameteri(
                 GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MAG_FILTER, GLES20.GL_LINEAR
@@ -635,9 +954,40 @@ class GloboView(contexto: Context) : GLSurfaceView(contexto) {
             return identificadores[0]
         }
 
+        /**
+         * El lado mayor de textura que admite este teléfono.
+         *
+         * El mapamundi se pide a 4096×2048, que es lo que aguanta cualquier
+         * móvil de los últimos años, pero OpenGL solo garantiza 2048: si el
+         * aparato dice menos, se encoge la imagen antes de subirla en vez de
+         * dejar una textura en blanco.
+         */
+        private fun maximoLadoTextura(): Int {
+            val valores = IntArray(1)
+            GLES20.glGetIntegerv(GLES20.GL_MAX_TEXTURE_SIZE, valores, 0)
+            return if (valores[0] > 0) valores[0] else 2048
+        }
+
+        private fun ajustarAlLimite(mapaBits: Bitmap): Bitmap {
+            val maximo = maximoLadoTextura()
+            if (mapaBits.width <= maximo && mapaBits.height <= maximo) return mapaBits
+
+            val factor = maximo.toFloat() / mapaBits.width
+            val ajustada = Bitmap.createScaledBitmap(
+                mapaBits,
+                maximo,
+                (mapaBits.height * factor).toInt().coerceAtLeast(1),
+                true,
+            )
+            if (ajustada !== mapaBits) mapaBits.recycle()
+            return ajustada
+        }
+
         private fun subirTextura(mapaBits: Bitmap) {
             GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, textura)
             GLUtils.texImage2D(GLES20.GL_TEXTURE_2D, 0, mapaBits, 0)
+            // Los mipmaps se generan aquí, una sola vez por textura.
+            GLES20.glGenerateMipmap(GLES20.GL_TEXTURE_2D)
         }
 
         companion object {
@@ -717,15 +1067,20 @@ class GloboView(contexto: Context) : GLSurfaceView(contexto) {
  * y la geografía llega unos segundos después. Si no hay red ni caché, se queda
  * con el océano y la rejilla: los satélites y las órbitas, que son lo
  * interesante, se dibujan igual.
+ *
+ * [alPedirMasDetalle] se avisa cuando alguien intenta acercarse más allá del
+ * tope: sin esa explicación, el tope parece que la app se ha quedado colgada.
  */
 @Composable
 fun GloboOjoDeDios(
     satelites: List<SateliteEnVuelo>,
     modifier: Modifier = Modifier,
+    alPedirMasDetalle: () -> Unit = {},
 ) {
     val contexto = LocalContext.current
     val repositorio = remember(contexto) { Repositorio(contexto) }
     val globo = remember { GloboView(contexto) }
+    val avisoActual = rememberUpdatedState(alPedirMasDetalle)
 
     AndroidView(modifier = modifier, factory = { globo })
 
@@ -742,10 +1097,12 @@ fun GloboOjoDeDios(
             }
         }
         propietario.lifecycle.addObserver(observador)
+        globo.alPedirMasDetalle = { avisoActual.value() }
         globo.prepararEscena()
 
         onDispose {
             propietario.lifecycle.removeObserver(observador)
+            globo.alPedirMasDetalle = null
             globo.onPause()
         }
     }
