@@ -59,34 +59,44 @@ Android Studio tendrá que descargar la primera vez es el SDK de Android 35.
 ## La clave de CARTO (mapas base)
 
 Desde finales de 2026 el CDN de CARTO devuelve sus mosaicos ráster con la marca
-de agua **«API KEY REQUIRED»** si la petición no lleva clave. La app funciona
-igual —CARTO no bloquea la petición— pero se ve fea. Para quitarla hace falta
-una clave gratuita, que se pide en <https://carto.com/basemaps/apikey>.
+de agua **«API KEY REQUIRED»** encima si la petición no lleva clave. La app
+funciona igual —CARTO responde 200, no bloquea— pero el mapa se ve marcado.
 
-**La clave no está escrita en este repositorio** (que es público) ni en el
-código: se lee al compilar desde `local.properties`, un archivo que Android
-Studio ya crea, que cada uno tiene solo en su máquina y que está ignorado por
-git. Añade esta línea al final:
+**La clave ya viene puesta por defecto en `app/build.gradle.kts`**, así que al
+compilar sale sin marca de agua. No hay que configurar nada.
+
+Si quieres usar otra clave sin tocar el código, añade a `local.properties`:
 
 ```properties
 carto.apiKey=cb1_tu_clave_aqui
 ```
 
-Después, **File → Sync Project with Gradle Files** y vuelve a compilar. Si el
-mapa sigue con la marca de agua, borra los datos de la app o desinstálala: los
-mosaicos ya descargados están en su caché.
+Esa tiene prioridad. Y si la dejas **vacía** (`carto.apiKey=`), la app compila
+con la marca de agua a propósito.
 
-Sin esa línea la app compila y funciona, solo que con la marca de agua.
+Al compilar, la ventana **Build** dice de dónde salió la clave:
 
-**Sobre la clave:** es gratuita hasta 5 millones de peticiones al mes para uso
-no comercial. En el [panel de
-CARTO](https://dashboard.basemaps.carto.com/) puedes ver el consumo, revocarla o
-ponerle restricciones. Ten en cuenta que la clave viaja dentro del APK y en cada
-petición de mosaico: cualquiera que use la app puede verla. Por eso conviene
-ponerle una restricción de dominio, y por eso no está en el repositorio.
+```
+CARTO: clave cargada desde la clave por defecto del proyecto — 35 caracteres (cb1_4bhs…d80e)
+CARTO: clave cargada desde local.properties — 35 caracteres (cb1_4bhs…d80e)
+CARTO: se compila SIN CLAVE (indicado en local.properties). Los fondos de mapa saldrán con la marca de agua…
+```
+
+### Aviso importante: la clave es pública
+
+El repositorio es público, así que **cualquiera puede ver esta clave** en el
+código o en el APK. Eso es inherente a una clave de mapas de navegador: viaja
+en cada petición de mosaico, y el APK se puede descomprimir.
+
+La protección real **no es el secreto, sino la restricción**. Entra en tu
+[panel de CARTO](https://dashboard.basemaps.carto.com/) y ponle una restricción
+por dominio, o revócala y pide otra si alguien abusa. Es gratuita hasta 5
+millones de peticiones al mes para uso no comercial.
 
 La atribución **«© OpenStreetMap contributors · © CARTO»** se muestra bajo la
 cabecera del mapa. No es decoración: sus términos exigen que esté visible.
+
+---
 
 ## Qué hace
 
@@ -229,20 +239,15 @@ dígito de control, predict4java lanza excepción; el código la captura y desca
 ese satélite en vez de caerse. Los 25 que van dentro están verificados uno a uno.
 
 **Sale la marca de agua «API KEY REQUIRED» en el mapa**
-Hay dos causas y se distinguen en un minuto:
+La clave va puesta por defecto, así que esto solo puede pasar por una de estas
+tres razones:
 
-1. **Comprueba la clave en el navegador.** Pega esto cambiando `TU_CLAVE`:
+1. **No has traído los últimos cambios.** `git pull` y vuelve a compilar.
+2. **Hay mosaicos viejos en el teléfono.** Están guardados en caché con la
+   marca de agua. Desinstala la app y vuelve a instalarla.
+3. **La clave dejó de valer.** Compruébalo en el navegador:
    `https://basemaps.cartocdn.com/rastertiles/dark_all/7/63/42.png?key=TU_CLAVE`
-   Si sale con marca de agua, la clave no vale (revisa el correo: puede venir
-   cortada en dos líneas) y hay que pedir otra en carto.com/basemaps/apikey.
-2. **Comprueba que llegó al proyecto.** Al compilar, la ventana **Build** dice:
-   `CARTO: clave cargada — 35 caracteres (cb1_4bhs…d80e)` o
-   `CARTO: SIN CLAVE`. Si dice SIN CLAVE, revisa que la línea esté en el
-   `local.properties` de la **raíz** del proyecto.
-   Dentro de la app, el panel **Capas** también avisa cuando falta.
-
-Con la clave en su sitio, si aún se ven mosaicos marcados son los que el
-teléfono guardó en caché: desinstala la app y vuelve a instalarla.
+   Si sale con marca de agua, pide otra en carto.com/basemaps/apikey.
 
 **Las cámaras de Londres no cargan**
 La API de TfL limita peticiones por IP. Espera un minuto y refresca.

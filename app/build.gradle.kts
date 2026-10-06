@@ -7,19 +7,35 @@ plugins {
 }
 
 /**
- * Clave de CARTO, si la hay.
+ * Clave de CARTO con la que se compila por defecto.
  *
- * No se escribe en el repositorio a propósito: es público, y una clave ahí la
- * puede copiar cualquiera para gastar tu cuota. Se busca, por este orden, en:
+ * Es la del titular del proyecto, y viene puesta para que la app funcione sin
+ * configurar nada: sin clave, CARTO devuelve cada mosaico con la marca de agua
+ * «API KEY REQUIRED» encima.
  *
- *   1. local.properties de la raíz  →  carto.apiKey=cb1_...
- *   2. ~/.gradle/gradle.properties  →  carto.apiKey=cb1_...
+ * Se puede sustituir sin tocar el código. Orden de prioridad:
  *
- * Si no está, la compilación sigue funcionando: los mapas de CARTO se ven con
- * la marca de agua «API KEY REQUIRED», que es lo que hace CARTO cuando la
- * petición va sin clave válida.
+ *   1. `carto.apiKey` en local.properties de la raíz
+ *   2. `carto.apiKey` en ~/.gradle/gradle.properties
+ *   3. esta constante
+ *
+ * Poner la propiedad vacía (`carto.apiKey=`) desactiva la clave y deja la app
+ * compilando con la marca de agua, que es como estaba antes.
+ *
+ * Aviso, porque el repositorio es público: esta clave queda a la vista de
+ * cualquiera que mire el repositorio o descompile el APK. Eso es inherente a
+ * una clave de mapas —viaja en cada petición de mosaico— y la protección real
+ * no es el secreto, sino la restricción por dominio del panel de CARTO.
  */
-val claveCarto: String = run {
+const val CLAVE_CARTO_POR_DEFECTO = "cb1_4bhs_1_fe78826369c026ab7150d80e"
+
+/**
+ * Resuelve la clave que se va a usar, y de dónde salió.
+ *
+ * Devuelve el valor ya limpio de espacios y saltos de línea: el correo de
+ * CARTO parte la clave en dos con mucha facilidad.
+ */
+val claveResuelta: Pair<String, String> = run {
     val propiedades = Properties()
     val archivo = rootProject.file("local.properties")
     if (archivo.exists()) archivo.inputStream().use { propiedades.load(it) }
@@ -28,23 +44,34 @@ val claveCarto: String = run {
     val deLocal = nombres.firstNotNullOfOrNull { propiedades.getProperty(it) }
     val deGradle = providers.gradleProperty("carto.apiKey").orNull
 
-    // Se quitan espacios y saltos de línea: el correo de CARTO parte la clave
-    // en dos líneas con facilidad.
-    (deLocal ?: deGradle).orEmpty().trim().replace(Regex("\\s+"), "")
+    val crudo = deLocal ?: deGradle ?: CLAVE_CARTO_POR_DEFECTO
+    val origen = when {
+        deLocal != null -> "local.properties"
+        deGradle != null -> "gradle.properties"
+        else -> "la clave por defecto del proyecto"
+    }
+
+    // Un valor vacío en local.properties significa «sin clave a propósito».
+    val forzadoSinClave = (deLocal != null || deGradle != null) && crudo.isBlank()
+    val limpio = if (forzadoSinClave) "" else crudo.trim().replace(Regex("\\s+"), "")
+
+    limpio to origen
 }
 
-// Deja constancia en la ventana Build de si la clave llegó o no. Sin esto, un
-// fallo de cableado y una clave inválida se ven exactamente igual: la marca de
-// agua en el mapa.
+val claveCarto: String = claveResuelta.first
+
+// Deja constancia en la ventana Build de si la clave llegó y de dónde salió.
+// Sin esto, un fallo de cableado y una clave inválida se ven igual: la marca
+// de agua en el mapa.
 if (claveCarto.isBlank()) {
     logger.lifecycle(
-        "CARTO: SIN CLAVE. Los fondos de mapa saldrán con la marca de agua " +
-            "«API KEY REQUIRED». Añade carto.apiKey=tu_clave a local.properties"
+        "CARTO: se compila SIN CLAVE (indicado en local.properties). " +
+            "Los fondos de mapa saldrán con la marca de agua «API KEY REQUIRED»."
     )
 } else {
     logger.lifecycle(
-        "CARTO: clave cargada — ${claveCarto.length} caracteres " +
-            "(${claveCarto.take(8)}…${claveCarto.takeLast(4)})"
+        "CARTO: clave cargada desde ${claveResuelta.second} — ${claveCarto.length} " +
+            "caracteres (${claveCarto.take(8)}…${claveCarto.takeLast(4)})"
     )
 }
 
@@ -60,8 +87,10 @@ android {
         versionCode = 1
         versionName = "1.0"
 
-        // Llega al código como BuildConfig.CARTO_KEY.
-        buildConfigField("String", "CARTO_KEY", "\"${claveCarto.replace("\"", "\\\"")}\"")
+        // Llega al código como BuildConfig.CARTO_KEY. Se entrecomilla para
+        // Java; una clave de CARTO solo lleva letras, dígitos, guiones y
+        // guiones bajos, así que no puede romper la cadena generada.
+        buildConfigField("String", "CARTO_KEY", "\"$claveCarto\"")
     }
 
     buildTypes {
