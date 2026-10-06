@@ -1,7 +1,0 @@
-<?xml version='1.0' encoding='utf-8'?>
-<resources>
-    <string name="app_name">Ojo de Dios</string>
-    <string name="title_activity_main">Ojo de Dios</string>
-    <string name="package_name">com.samuelpart.ojodedios</string>
-    <string name="custom_url_scheme">com.samuelpart.ojodedios</string>
-</resources>
