@@ -1,0 +1,23 @@
+# ── Proyecto nativo de Android ──────────────────────────────────────
+# Se versiona el código y la configuración; lo que genera Gradle, no.
+
+.gradle/
+build/
+app/build/
+app/release/
+local.properties
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Android Studio
+.idea/
+*.iml
+*.apk
+*.aab
+*.keystore
+*.jks
+
+# Sistema
+.DS_Store
+*.log
