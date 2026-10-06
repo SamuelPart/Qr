@@ -74,9 +74,10 @@ object Fuentes {
      * clave. El parámetro se llama `key`, no `api_key`, y solo se añade si hay
      * clave: una petición sin él sigue siendo válida.
      */
-    private fun urlCarto(estilo: String): String =
-        "https://basemaps.cartocdn.com/rastertiles/$estilo/{z}/{x}/{y}.png" +
-            if (CLAVE_CARTO.isBlank()) "" else "?key=$CLAVE_CARTO"
+    private fun urlCarto(estilo: String): String {
+        val base = "https://basemaps.cartocdn.com/rastertiles/$estilo/{z}/{x}/{y}.png"
+        return if (CLAVE_CARTO.isBlank()) base else "$base?key=$CLAVE_CARTO"
+    }
 
     /**
      * osmdroid guarda los mosaicos en caché por nombre de fuente. Si la clave
