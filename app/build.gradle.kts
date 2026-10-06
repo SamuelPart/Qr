@@ -27,7 +27,10 @@ plugins {
  * una clave de mapas —viaja en cada petición de mosaico— y la protección real
  * no es el secreto, sino la restricción por dominio del panel de CARTO.
  */
-const val CLAVE_CARTO_POR_DEFECTO = "cb1_4bhs_1_fe78826369c026ab7150d80e"
+// Sin `const`: en un script .kts el nivel superior no es un objeto, y Kotlin
+// solo admite `const val` dentro de objetos o en el nivel superior de un
+// archivo .kt de verdad.
+val CLAVE_CARTO_POR_DEFECTO = "cb1_4bhs_1_fe78826369c026ab7150d80e"
 
 /**
  * Resuelve la clave que se va a usar, y de dónde salió.
