@@ -229,8 +229,20 @@ dígito de control, predict4java lanza excepción; el código la captura y desca
 ese satélite en vez de caerse. Los 25 que van dentro están verificados uno a uno.
 
 **Sale la marca de agua «API KEY REQUIRED» en el mapa**
-Falta la clave de CARTO. Ver la sección de arriba: una línea en
-`local.properties` y volver a compilar.
+Hay dos causas y se distinguen en un minuto:
+
+1. **Comprueba la clave en el navegador.** Pega esto cambiando `TU_CLAVE`:
+   `https://basemaps.cartocdn.com/rastertiles/dark_all/7/63/42.png?key=TU_CLAVE`
+   Si sale con marca de agua, la clave no vale (revisa el correo: puede venir
+   cortada en dos líneas) y hay que pedir otra en carto.com/basemaps/apikey.
+2. **Comprueba que llegó al proyecto.** Al compilar, la ventana **Build** dice:
+   `CARTO: clave cargada — 35 caracteres (cb1_4bhs…d80e)` o
+   `CARTO: SIN CLAVE`. Si dice SIN CLAVE, revisa que la línea esté en el
+   `local.properties` de la **raíz** del proyecto.
+   Dentro de la app, el panel **Capas** también avisa cuando falta.
+
+Con la clave en su sitio, si aún se ven mosaicos marcados son los que el
+teléfono guardó en caché: desinstala la app y vuelve a instalarla.
 
 **Las cámaras de Londres no cargan**
 La API de TfL limita peticiones por IP. Espera un minuto y refresca.
